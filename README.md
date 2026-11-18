@@ -88,3 +88,18 @@ La primera prueba de Python usa vectores de prueba para comprobar la conexión, 
 - [Informe del proyecto](docs/informe/informe.md) y [ejemplos de datos del diseño](docs/informe/DATOS-INVERNADERO.pdf)
 
 La migración conserva el esquema de la primera etapa. El MER editable enumera las nueve tablas y dieciséis claves foráneas. El PDF especifica restricciones adicionales sobre catálogo, alertas y fotos que el SQL también aplica.
+
+## Aplicación de escritorio JavaFX
+
+Desde la raíz, con Docker Desktop abierto y el JDK y Maven disponibles, ejecuta:
+
+```sh
+docker compose up -d --build --wait
+mvn -f java/pom.xml javafx:run
+```
+
+En **Monitoreo** selecciona sensor y magnitud, ingresa el valor y registra la lectura. En **Alertas** puedes consultar las recomendaciones y resolver la alerta seleccionada.
+
+**Memoria visual** utiliza el entorno Python descrito arriba. En Windows puedes crearlo con `py -3.12 -m venv .venv` y ejecutar los comandos de instalación sustituyendo `python` por `.venv\Scripts\python.exe`. JavaFX detecta el intérprete del proyecto; para usar otro configura `INVERNADEROS_PYTHON` con su ruta completa. La primera consulta descarga los pesos de CLIP. Conserva la carpeta `datos/fotos/` junto con las copias de seguridad de la base: contiene las fotos propias importadas.
+
+Elige un JPEG o PNG y usa **Buscar similares** para consultar hasta cinco referencias por distancia coseno. Para añadir una referencia usa **Registrar foto propia**, selecciona el cultivo y escribe una etiqueta revisada. También puedes cargar las fotos del conjunto demo mediante las instrucciones de Python. La orientación muestra la etiqueta de la referencia más cercana si su distancia es como máximo 0,10. Es un criterio ilustrativo sin validación agronómica. Una coincidencia visual por sí sola es insuficiente para confirmar una enfermedad.
