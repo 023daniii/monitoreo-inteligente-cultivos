@@ -18,6 +18,8 @@ import javafx.stage.FileChooser;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.MalformedInputException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -301,12 +303,23 @@ public final class PanelFotos extends VBox {
             var hijo = proceso.redirectError(log.toFile()).start();
             String salida = new String(hijo.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             if (hijo.waitFor() != 0) {
-                var lineas = Files.readAllLines(log, StandardCharsets.UTF_8);
-                throw new IOException(lineas.isEmpty() ? "Error al procesar la foto." : lineas.get(lineas.size() - 1));
+                throw new IOException(mensajePython(log));
             }
             return JsonParser.parseString(salida);
         } finally {
             Files.deleteIfExists(log);
         }
+    }
+
+    static String mensajePython(Path log) throws IOException {
+        String mensaje;
+        try {
+            mensaje = Files.readString(log, StandardCharsets.UTF_8);
+        } catch (MalformedInputException error) {
+            // El lanzador de Windows puede fallar antes de que Python aplique PYTHONIOENCODING.
+            mensaje = new String(Files.readAllBytes(log), Charset.forName("windows-1252"));
+        }
+        return mensaje.lines().filter(linea -> !linea.isBlank()).reduce((a, b) -> b)
+            .orElse("Python terminó sin devolver un resultado.");
     }
 }
