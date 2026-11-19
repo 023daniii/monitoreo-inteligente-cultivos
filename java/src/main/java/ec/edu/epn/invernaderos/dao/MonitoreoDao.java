@@ -27,9 +27,11 @@ public final class MonitoreoDao {
             INSERT INTO medicion (id_sensor, id_tipo_medicion, fecha_hora, valor, metadatos)
             SELECT s.id_sensor, t.id_catalogo, ?, ?,
                    NULLIF(jsonb_strip_nulls(jsonb_build_object('origen', ?::text)), '{}'::jsonb)
-            FROM sensor s JOIN invernadero i USING (id_invernadero)
+            FROM sensor s JOIN invernadero i USING (id_invernadero) JOIN terreno USING (id_terreno)
+            JOIN catalogo tipo_sensor ON tipo_sensor.id_catalogo = s.id_tipo_sensor
             CROSS JOIN catalogo t JOIN catalogo categoria ON categoria.id_catalogo = t.id_padre
             WHERE s.codigo = ? AND t.codigo = ? AND s.estado AND i.estado AND t.estado
+              AND terreno.estado AND tipo_sensor.estado
               AND categoria.codigo = 'CAT_TIPO_MEDICION' AND categoria.id_padre IS NULL
               AND s.fecha_instalacion <= ? AND i.fecha_instalacion <= ?
             ON CONFLICT ON CONSTRAINT medicion_uq3 DO NOTHING

@@ -1,6 +1,8 @@
 import argparse
+from io import BytesIO
 from pathlib import Path
 
+from PIL import Image
 from psycopg.rows import dict_row
 
 from .conexion import conectar
@@ -8,8 +10,16 @@ from .embeddings import MODELO, generar_embedding, literal_vector
 
 
 def buscar(ruta):
-    vector = literal_vector(generar_embedding(Path(ruta).read_bytes()))
+    contenido = Path(ruta).read_bytes()
     with conectar() as conexion, conexion.cursor(row_factory=dict_row) as cursor:
+        conexion.autocommit = True
+        cursor.execute("SELECT 1 FROM registro_fotografico WHERE estado AND modelo_embedding = %s LIMIT 1",
+                       (MODELO,))
+        if cursor.fetchone() is None:
+            with Image.open(BytesIO(contenido)) as foto:
+                foto.verify()
+            return []
+        vector = literal_vector(generar_embedding(contenido))
         cursor.execute(
             """
             SELECT id_foto, ruta_imagen, etiqueta, origen, fuente, licencia,

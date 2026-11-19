@@ -100,7 +100,7 @@ public final class InventarioDao {
                 ORDER BY m.fecha_hora DESC, m.id_medicion DESC LIMIT 1
             ) ultima ON true
             LEFT JOIN catalogo medida ON medida.id_catalogo = ultima.id_tipo_medicion
-            WHERE s.estado AND s.id_invernadero = ?
+            WHERE s.estado AND tipo.estado AND s.id_invernadero = ?
             ORDER BY s.id_sensor
             """;
         Map<String, Magnitud> catalogo = new HashMap<>();

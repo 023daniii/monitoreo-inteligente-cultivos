@@ -1,11 +1,16 @@
+from contextlib import chdir
 import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+
+import psycopg
 
 from memoria_visual.buscar_similares import buscar
 from memoria_visual.conexion import conectar
 from memoria_visual.embeddings import generar_embedding
+from memoria_visual.escritorio import importar
 from memoria_visual.registrar_foto import registrar
 
 FOTOS = Path("datos/imagenes_demo")
@@ -65,6 +70,51 @@ class MemoriaVisualTest(unittest.TestCase):
         self.assertTrue(all(dimensiones == 512 for _, dimensiones, _, _ in registros))
         self.assertIn((id_foto, 512, None, "DATASET"), registros)
         self.assertIn((propia, 512, id_cultivo, "PROPIA"), registros)
+
+    def test_galeria_vacia_no_carga_clip(self):
+        with patch("memoria_visual.buscar_similares.generar_embedding") as modelo:
+            self.assertEqual(buscar(FOTOS / "foto-5.jpg"), [])
+            modelo.assert_not_called()
+
+    def test_registro_fallido_no_deja_archivo_ni_fila(self):
+        foto = (FOTOS / "foto-0.jpg").resolve()
+        with conectar() as conexion:
+            cultivo = conexion.execute("SELECT min(id_cultivo) FROM cultivo").fetchone()[0]
+        with TemporaryDirectory() as temporal, chdir(temporal):
+            with patch("memoria_visual.registrar_foto.generar_embedding", return_value=[1.0] * 512):
+                with self.assertRaises(psycopg.errors.ForeignKeyViolation):
+                    importar(foto, -1, None)
+                self.assertFalse(Path("datos/fotos").exists())
+                with patch("memoria_visual.registrar_foto.guardar_copia", side_effect=OSError("disco lleno")):
+                    with self.assertRaisesRegex(OSError, "disco lleno"):
+                        importar(foto, cultivo, None)
+            with conectar() as conexion:
+                self.assertEqual(conexion.execute("SELECT count(*) FROM registro_fotografico").fetchone()[0], 0)
+
+    def test_importar_una_vez_y_conservar_la_ruta_registrada(self):
+        demo = FOTOS / "foto-0.jpg"
+        externa = demo.resolve()
+        propia = (FOTOS / "foto-1.jpg").resolve()
+        with conectar() as conexion:
+            cultivo = conexion.execute("SELECT min(id_cultivo) FROM cultivo").fetchone()[0]
+        with patch("memoria_visual.registrar_foto.generar_embedding", return_value=[1.0] * 512) as modelo:
+            id_demo, _ = registrar(demo, origen="DATASET", fuente="Prueba", licencia="Prueba")
+            self.ids.append(id_demo)
+            with TemporaryDirectory() as temporal, chdir(temporal):
+                self.assertEqual(importar(externa, cultivo, None), {"id": id_demo, "nueva": False})
+                self.assertFalse(Path("datos/fotos").exists())
+                alta = importar(propia, cultivo, "Gotas de agua")
+                self.assertTrue(alta["nueva"])
+                self.ids.append(alta["id"])
+                with conectar() as conexion:
+                    ruta = Path(conexion.execute("SELECT ruta_imagen FROM registro_fotografico WHERE id_foto = %s",
+                                                 (alta["id"],)).fetchone()[0])
+                self.assertEqual(ruta.read_bytes(), propia.read_bytes())
+                ruta.unlink()
+                self.assertEqual(importar(propia, cultivo, None), {"id": alta["id"], "nueva": False})
+                self.assertEqual(list(Path("datos/fotos").iterdir()), [ruta])
+                self.assertEqual(ruta.read_bytes(), propia.read_bytes())
+                self.assertEqual(modelo.call_count, 2)
 
     def test_postgres_pgvector_y_deduplicacion(self):
         def vector_de_prueba(contenido):

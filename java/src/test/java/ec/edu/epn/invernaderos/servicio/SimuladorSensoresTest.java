@@ -1,11 +1,59 @@
 package ec.edu.epn.invernaderos.servicio;
 
 import ec.edu.epn.invernaderos.config.Conexion;
+import ec.edu.epn.invernaderos.modelo.Medicion;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SimuladorSensoresTest {
+    @Test
+    void lecturaIndividualRequiereTerrenoYTipoDeSensorActivos() throws Exception {
+        var lectura = new Medicion("TEMP-001", "MED_TEMP_AMB", LocalDateTime.now(), BigDecimal.TEN);
+        try (var conexion = Conexion.abrir(); var sql = conexion.createStatement()) {
+            conexion.setAutoCommit(false);
+            try {
+                var punto = conexion.setSavepoint();
+                assertEquals(1, sql.executeUpdate("UPDATE catalogo SET estado = false WHERE codigo = 'SEN_TEMP'"));
+                assertThrows(IllegalArgumentException.class,
+                    () -> Monitoreo.registrarEnTransaccion(conexion, lectura, "MANUAL"));
+                conexion.rollback(punto);
+                assertEquals(1, sql.executeUpdate("""
+                    UPDATE terreno SET estado = false WHERE id_terreno = (
+                        SELECT id_terreno FROM invernadero JOIN sensor USING (id_invernadero) WHERE codigo = 'TEMP-001'
+                    )
+                    """));
+                assertThrows(IllegalArgumentException.class,
+                    () -> Monitoreo.registrarEnTransaccion(conexion, lectura, "MANUAL"));
+            } finally {
+                conexion.rollback();
+            }
+        }
+    }
+
+    @Test
+    void unaMagnitudInactivaPermiteMedirLosDemasSensores() throws Exception {
+        try (var conexion = Conexion.abrir(); var sql = conexion.createStatement()) {
+            conexion.setAutoCommit(false);
+            try {
+                int invernadero;
+                try (var fila = sql.executeQuery("SELECT id_invernadero FROM sensor WHERE codigo = 'TEMP-001'")) {
+                    fila.next();
+                    invernadero = fila.getInt(1);
+                }
+                assertEquals(1, sql.executeUpdate("UPDATE catalogo SET estado = false WHERE codigo = 'MED_PH'"));
+                var simulador = new SimuladorSensores();
+                assertEquals(2, simulador.registrarLote(conexion, invernadero, false).mediciones());
+                assertEquals(0, simulador.registrarLote(conexion, invernadero, true).mediciones());
+            } finally {
+                conexion.rollback();
+            }
+        }
+    }
+
     @Test
     void unaHoraDesdeLaUltimaLecturaInclusoSiFueManual() throws Exception {
         try (var conexion = Conexion.abrir(); var sql = conexion.createStatement()) {

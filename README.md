@@ -9,19 +9,33 @@ Proyecto de Fundamentos de Bases de Datos de la Escuela Politécnica Nacional. J
 - Python 3.12 para la memoria visual
 - Internet en la primera instalación de dependencias y descarga de los pesos de CLIP
 
-Los comandos se ejecutan desde la raíz del repositorio en una terminal tipo Bash.
+Ejecuta los comandos desde la carpeta que contiene `compose.yaml`.
 
 ## Levantar la base desde cero
 
+En Windows, abre Docker Desktop, espera a que indique **Engine running** y ejecuta en PowerShell
+
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+Get-Content .env | ForEach-Object {
+    if ($_ -match '^(DB_HOST|DB_PORT|POSTGRES_DB|POSTGRES_USER|POSTGRES_PASSWORD)=(.*)$') {
+        Set-Item -Path "Env:$($Matches[1])" -Value $Matches[2]
+    }
+}
+docker compose up -d --build --wait
+```
+
+En Bash
+
 ```sh
-cp .env.example .env
+[ -f .env ] || cp .env.example .env
 set -a
 . ./.env
 set +a
 docker compose up -d --build --wait
 ```
 
-Usa `.env.example` como plantilla. Java y Python leen `DB_HOST`, `DB_PORT`, `POSTGRES_DB`, `POSTGRES_USER` y `POSTGRES_PASSWORD` del entorno. Compose publica PostgreSQL solo en la interfaz local. Cambia `DB_PORT` si el 5432 ya está ocupado. Las credenciales de ejemplo son para uso local.
+Usa `.env.example` como plantilla. Java y Python leen `DB_HOST`, `DB_PORT`, `POSTGRES_DB`, `POSTGRES_USER` y `POSTGRES_PASSWORD` del entorno. Abre la aplicación desde esa misma terminal para que reciba los valores que cargaste. Compose publica PostgreSQL solo en la interfaz local. Cambia `DB_PORT` si el 5432 ya está ocupado. Las credenciales de ejemplo son para uso local.
 
 En un volumen nuevo, PostgreSQL 17 habilita pgvector 0.8.2 y carga el esquema y las semillas. En un volumen de la versión anterior, el servicio `preparar-red` amplía el escenario al arrancar. Puedes ejecutar el mismo comando de Compose para actualizar tu instalación con los datos existentes. Cuando termine la preparación, el servicio `medidor` comenzará las mediciones automáticas.
 
@@ -38,27 +52,34 @@ El primer comando registra lecturas de 25, 30 y 34,2 °C con el sensor `TEMP-001
 
 ## Demostración de memoria visual en Python
 
-```sh
-python3.12 -m venv .venv
-. .venv/bin/activate
-python -m pip install setuptools==80.9.0 wheel==0.45.1
-python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.7.1 torchvision==0.22.1
-python -m pip install --no-build-isolation -r python/requirements.txt
-export PYTHONPATH="$PWD/python"
+Prepara el entorno de la IA una vez, desde PowerShell
+
+```powershell
+py -3.12 .\python\preparar.py
 ```
 
-El paquete oficial de CLIP descarga y verifica los pesos de ViT-B/32 desde `openaipublic.azureedge.net` al procesar la primera foto. Puedes indicar un directorio de caché con `CLIP_CACHE`. El equipo debe poder descargar los pesos o contar con el archivo oficial en esa caché.
+Si Windows no reconoce `py -3.12`, instala Python 3.12 con `winget install -e --id Python.Python.3.12` y vuelve a abrir PowerShell.
+
+En Bash usa
 
 ```sh
-for i in 0 1 2 3 4; do
-  python -m memoria_visual.registrar_foto "datos/imagenes_demo/foto-$i.jpg" \
-    --origen DATASET --fuente "Imágenes sintéticas del proyecto" \
-    --licencia "Uso en la demostración académica"
-done
+python3.12 python/preparar.py
+```
+
+El script instala las dependencias en `.venv` y verifica que se puedan importar. JavaFX detecta ese intérprete al usar el apartado **Imágenes**. Si configuras `INVERNADEROS_PYTHON`, se usará la ruta que indiques. CLIP descarga y verifica los pesos de ViT-B/32 la primera vez que genera un vector. Puedes indicar su carpeta de caché con `CLIP_CACHE`.
+
+Para probar desde la interfaz, elige `datos/imagenes_demo/foto-5.jpg` y pulsa **Buscar similares**. Si aparecen menos de cinco resultados, pulsa **Cargar las 5 referencias de ejemplo**. La aplicación registra las imágenes 0 a 4 que falten en PostgreSQL y muestra las coincidencias. Pulsa una miniatura para leer su observación. La foto que consultas solo se guarda si eliges **Registrar foto propia**.
+
+También puedes ejecutar la demostración desde Bash
+
+```sh
+. .venv/bin/activate
+export PYTHONPATH="$PWD/python"
+python -m memoria_visual.escritorio buscar-demo datos/imagenes_demo/foto-5.jpg
 python -m memoria_visual.buscar_similares datos/imagenes_demo/foto-5.jpg
 ```
 
-Para una foto propia usa `--origen PROPIA --cultivo ID`. Las fotos de dataset requieren fuente y licencia. Registra rutas relativas a la raíz del proyecto. Los duplicados exactos se detectan por SHA-256. La búsqueda devuelve hasta cinco filas por distancia coseno ascendente.
+Para registrar una foto por consola usa `python -m memoria_visual.registrar_foto RUTA --origen PROPIA --cultivo ID`, con una ruta relativa al proyecto. Las fotos de dataset requieren fuente y licencia. Los duplicados exactos se detectan por SHA-256. La búsqueda devuelve hasta cinco filas por distancia coseno ascendente.
 
 ## Pruebas
 
@@ -100,6 +121,4 @@ La barra lateral permite elegir entre cuatro terrenos, cada uno con cuatro inver
 - **Buzón de alertas.** Muestra las alertas del invernadero seleccionado. Desmarca el filtro local para consultar toda la red. Puedes buscar por sensor, invernadero, terreno o cultivo, filtrar por estado, revisar la lectura y la recomendación y marcar una alerta como resuelta.
 - **Imágenes.** Selecciona o arrastra un archivo JPEG o PNG. Puedes registrar la foto en uno de los cultivos del invernadero elegido o buscar las cinco referencias más próximas en la colección compartida. Pulsa una miniatura para consultar su observación.
 
-**Memoria visual** utiliza el entorno Python descrito arriba. En Windows puedes crearlo con `py -3.12 -m venv .venv` y ejecutar los comandos de instalación sustituyendo `python` por `.venv\Scripts\python.exe`. JavaFX detecta el intérprete del proyecto; para usar otro configura `INVERNADEROS_PYTHON` con su ruta completa. La primera consulta descarga los pesos de CLIP. Conserva la carpeta `datos/fotos/` junto con las copias de seguridad de la base: contiene las fotos propias importadas.
-
-Elige un JPEG o PNG y usa **Buscar similares** para consultar hasta cinco referencias por distancia coseno. Para añadir una referencia usa **Registrar foto propia**, selecciona el cultivo y escribe una etiqueta revisada. También puedes cargar las fotos del conjunto demo mediante las instrucciones de Python. Pulsa una foto de los resultados para ver la observación registrada en esa referencia. Puedes cambiar la selección para consultar otra. Una coincidencia visual por sí sola es insuficiente para confirmar una enfermedad.
+Conserva `datos/fotos/` junto con las copias de seguridad de la base. Contiene los archivos de las fotos propias importadas. La observación pertenece a la referencia seleccionada. Un diagnóstico de la planta requiere revisión agronómica.

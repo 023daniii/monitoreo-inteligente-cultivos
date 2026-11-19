@@ -88,8 +88,7 @@ public final class SimuladorSensores {
                 while (filas.next()) {
                     var canal = Canal.deTipo(filas.getString(3));
                     var ahora = filas.getObject(4, LocalDateTime.class);
-                    if (canal == null || (soloPendientes &&
-                        tieneLecturaReciente(conexion, filas.getInt(1), canal.magnitud, ahora))) {
+                    if (canal == null || !admiteLectura(conexion, filas.getInt(1), canal.magnitud, ahora, soloPendientes)) {
                         continue;
                     }
                     var lectura = new Medicion(filas.getString(2), canal.magnitud, ahora, canal.simular());
@@ -105,18 +104,22 @@ public final class SimuladorSensores {
         return new Resumen(lecturas, alertas);
     }
 
-    private boolean tieneLecturaReciente(Connection conexion, int idSensor, String magnitud, LocalDateTime ahora)
-            throws SQLException {
+    private boolean admiteLectura(Connection conexion, int idSensor, String magnitud,
+                                  LocalDateTime ahora, boolean soloPendientes) throws SQLException {
         String sql = """
-            SELECT FROM medicion m JOIN catalogo t ON t.id_catalogo = m.id_tipo_medicion
-            WHERE m.id_sensor = ? AND t.codigo = ? AND m.fecha_hora > ? AND m.fecha_hora <= ?
-            LIMIT 1
+            SELECT FROM catalogo t
+            WHERE t.codigo = ? AND t.estado AND (NOT ? OR NOT EXISTS (
+                SELECT FROM medicion m WHERE m.id_sensor = ? AND m.id_tipo_medicion = t.id_catalogo
+                  AND m.fecha_hora > ? AND m.fecha_hora <= ?
+            ))
+            FOR SHARE OF t
             """;
         try (var consulta = conexion.prepareStatement(sql)) {
-            consulta.setInt(1, idSensor);
-            consulta.setString(2, magnitud);
-            consulta.setObject(3, ahora.minusHours(1));
-            consulta.setObject(4, ahora);
+            consulta.setString(1, magnitud);
+            consulta.setBoolean(2, soloPendientes);
+            consulta.setInt(3, idSensor);
+            consulta.setObject(4, ahora.minusHours(1));
+            consulta.setObject(5, ahora);
             try (var filas = consulta.executeQuery()) {
                 return filas.next();
             }

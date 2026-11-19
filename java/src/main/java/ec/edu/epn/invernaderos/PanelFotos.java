@@ -42,6 +42,8 @@ public final class PanelFotos extends VBox {
     private final Button elegir = new Button("Elegir foto");
     private final Button buscar = new Button("Buscar similares");
     private final Button registrar = new Button("Registrar foto propia");
+    private final Button cargarDemo = new Button("Cargar las 5 referencias de ejemplo");
+    private final Label estadoBusqueda = new Label("Elige una foto para buscar referencias.");
     private final VBox referencias = new VBox(6);
     private final Label observacion = new Label();
     private final Label estado = new Label();
@@ -82,20 +84,26 @@ public final class PanelFotos extends VBox {
             evento.consume();
         });
         buscar.getStyleClass().add("foto-primario");
-        buscar.setOnAction(evento -> buscar());
+        buscar.setOnAction(evento -> buscar(false));
+        cargarDemo.setOnAction(evento -> buscar(true));
+        cargarDemo.managedProperty().bind(cargarDemo.visibleProperty());
+        cargarDemo.disableProperty().bind(procesando);
+        cargarDemo.setVisible(false);
         registrar.setOnAction(evento -> registrar());
         cultivos.setMaxWidth(Double.MAX_VALUE);
         etiqueta.setPromptText("Observación de la foto (opcional)");
+        estado.setWrapText(true);
+        estado.managedProperty().bind(estado.textProperty().isNotEmpty());
         var formulario = tarjeta(titulo, marco, archivo, acciones, new Separator(), invernadero,
-            cultivos, etiqueta, registrar);
+            cultivos, etiqueta, registrar, estado);
         formulario.setAlignment(Pos.TOP_LEFT);
 
         observacion.setWrapText(true);
         observacion.getStyleClass().add("foto-observacion");
         observacion.managedProperty().bind(observacion.visibleProperty());
         observacion.setVisible(false);
-        referencias.getChildren().add(new Label("Elige una foto para buscar referencias."));
-        var coincidencias = tarjeta(titulo("Referencias similares"), observacion, referencias);
+        estadoBusqueda.setWrapText(true);
+        var coincidencias = tarjeta(titulo("Referencias similares"), estadoBusqueda, cargarDemo, observacion, referencias);
         var cuerpo = new GridPane();
         cuerpo.setHgap(14);
         cuerpo.setVgap(14);
@@ -117,12 +125,11 @@ public final class PanelFotos extends VBox {
             GridPane.setRowIndex(coincidencias, apilar ? 1 : 0);
         });
 
-        estado.setWrapText(true);
         elegir.disableProperty().bind(procesando);
         procesando.addListener((obs, anterior, actual) -> actualizarBotones());
         cultivos.valueProperty().addListener((obs, anterior, actual) -> actualizarBotones());
         setInvernadero(null, Map.of());
-        getChildren().addAll(scroll, estado);
+        getChildren().add(scroll);
         VBox.setVgrow(scroll, Priority.ALWAYS);
         actualizarBotones();
     }
@@ -172,7 +179,9 @@ public final class PanelFotos extends VBox {
         etiqueta.clear();
         referencias.getChildren().clear();
         observacion.setVisible(false);
-        estado.setText("Foto lista para buscar o registrar.");
+        cargarDemo.setVisible(false);
+        estadoBusqueda.setText("Pulsa Buscar similares para comparar esta foto.");
+        estado.setText("");
         actualizarBotones();
         return true;
     }
@@ -186,19 +195,26 @@ public final class PanelFotos extends VBox {
         registrar.setDisable(procesando.get() || seleccionada == null || cultivos.getValue() == null);
     }
 
-    private void buscar() {
+    private void buscar(boolean conDemo) {
         referencias.getChildren().clear();
         observacion.setVisible(false);
-        ejecutar("Comparando con la colección mediante CLIP…", respuesta -> {
+        String mensaje = conDemo ? "Preparando las cinco referencias y comparando tu foto. "
+            + "La primera vez, CLIP descarga el modelo (338 MiB)…"
+            : "Consultando la colección de fotografías…";
+        ejecutar(estadoBusqueda, mensaje, respuesta -> {
             JsonArray filas = respuesta.getAsJsonArray();
             var grupo = new ToggleGroup();
             for (var fila : filas) referencias.getChildren().add(opcion(fila.getAsJsonObject(), grupo));
+            cargarDemo.setVisible(filas.size() < 5 && !conDemo);
             if (filas.isEmpty()) {
-                estado.setText("La colección está vacía. Registra una foto de referencia.");
+                estadoBusqueda.setText(conDemo
+                    ? "Las imágenes de ejemplo ya están registradas, pero ninguna está activa para este modelo. "
+                        + "Puedes registrar una foto propia."
+                    : "La colección aún no tiene referencias activas para CLIP. Carga los ejemplos o registra una foto propia.");
             } else {
-                estado.setText("Selecciona una referencia para ver su observación.");
+                estadoBusqueda.setText("Selecciona una referencia para ver su observación.");
             }
-        }, "buscar", seleccionada.toString());
+        }, conDemo ? "buscar-demo" : "buscar", seleccionada.toString());
     }
 
     private RadioButton opcion(JsonObject fila, ToggleGroup grupo) {
@@ -244,16 +260,16 @@ public final class PanelFotos extends VBox {
             estado.setText("La observación admite hasta 120 caracteres.");
             return;
         }
-        ejecutar("Generando el vector y guardando la foto…", respuesta -> {
+        ejecutar(estado, "Generando el vector y guardando la foto…", respuesta -> {
             var fila = respuesta.getAsJsonObject();
             estado.setText(fila.get("nueva").getAsBoolean() ? "Foto registrada en " + destino.nombre() + "."
                 : "Esa foto ya está en la colección (ID " + fila.get("id").getAsLong() + ").");
         }, "registrar", seleccionada.toString(), "--cultivo", Integer.toString(destino.id()), "--etiqueta", nota);
     }
 
-    private void ejecutar(String mensaje, Consumer<JsonElement> terminado, String... argumentos) {
+    private void ejecutar(Label aviso, String mensaje, Consumer<JsonElement> terminado, String... argumentos) {
         procesando.set(true);
-        estado.setText(mensaje);
+        aviso.setText(mensaje);
         var tarea = new Task<JsonElement>() {
             @Override protected JsonElement call() throws Exception { return python(argumentos); }
         };
@@ -263,7 +279,7 @@ public final class PanelFotos extends VBox {
         });
         tarea.setOnFailed(evento -> {
             procesando.set(false);
-            estado.setText("Memoria visual: " + tarea.getException().getMessage());
+            aviso.setText("Memoria visual: " + tarea.getException().getMessage());
         });
         var hilo = new Thread(tarea, "memoria-visual");
         hilo.setDaemon(true);
@@ -298,13 +314,28 @@ public final class PanelFotos extends VBox {
         var proceso = new ProcessBuilder(comando).directory(raiz.toFile());
         proceso.environment().put("PYTHONPATH", raiz.resolve("python").toString());
         proceso.environment().put("PYTHONIOENCODING", "utf-8");
+        String preparar = "Desde la carpeta del proyecto, ejecuta "
+            + (windows ? "py -3.12 .\\python\\preparar.py" : "python3.12 python/preparar.py")
+            + " y vuelve a intentarlo.";
+        if (System.getenv("INVERNADEROS_PYTHON") != null) {
+            preparar += " Revisa también el intérprete elegido en INVERNADEROS_PYTHON.";
+        }
         var log = Files.createTempFile("memoria-visual-", ".log");
         try {
-            var hijo = proceso.redirectError(log.toFile()).start();
-            String salida = new String(hijo.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            if (hijo.waitFor() != 0) {
-                throw new IOException(mensajePython(log));
+            Process hijo;
+            try {
+                hijo = proceso.redirectError(log.toFile()).start();
+            } catch (IOException error) {
+                throw new IOException("No se pudo iniciar " + ejecutable + ". " + preparar, error);
             }
+            String salida = new String(hijo.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            int codigo = hijo.waitFor();
+            if (codigo != 0) {
+                String error = mensajePython(log);
+                if (codigo == 9009 || error.contains("ModuleNotFoundError:")) error += "\n" + preparar;
+                throw new IOException(error);
+            }
+            if (salida.isBlank()) throw new IOException(mensajePython(log) + "\n" + preparar);
             return JsonParser.parseString(salida);
         } finally {
             Files.deleteIfExists(log);
