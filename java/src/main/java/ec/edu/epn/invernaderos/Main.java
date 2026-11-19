@@ -57,7 +57,7 @@ public final class Main {
         String magnitud = entrada.nextLine().trim();
         System.out.println("Valor de la lectura:");
         var valor = new BigDecimal(entrada.nextLine().trim().replace(',', '.'));
-        imprimir(new Medicion(sensor, magnitud, LocalDateTime.now(), valor));
+        imprimir(new Medicion(sensor, magnitud, LocalDateTime.now(java.time.ZoneId.of("America/Guayaquil")), valor));
     }
 
     private static void imprimir(Medicion lectura) throws SQLException {

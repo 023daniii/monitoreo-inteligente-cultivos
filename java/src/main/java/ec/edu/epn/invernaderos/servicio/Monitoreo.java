@@ -4,6 +4,7 @@ import ec.edu.epn.invernaderos.config.Conexion;
 import ec.edu.epn.invernaderos.dao.MonitoreoDao;
 import ec.edu.epn.invernaderos.modelo.Alerta;
 import ec.edu.epn.invernaderos.modelo.Medicion;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
 
@@ -14,16 +15,7 @@ public final class Monitoreo {
         try (var conexion = Conexion.abrir()) {
             conexion.setAutoCommit(false);
             try {
-                var dao = new MonitoreoDao(conexion);
-                var registro = dao.registrar(lectura);
-                if (registro.nuevo()) {
-                    for (var regla : dao.reglasAplicables(registro.id())) {
-                        if (regla.seActivaCon(lectura.valor())) {
-                            dao.crearAlerta(registro.id(), regla, lectura.fecha());
-                        }
-                    }
-                }
-                var resultado = new Resultado(registro.id(), registro.nuevo(), dao.alertas(registro.id()));
+                var resultado = registrarEnTransaccion(conexion, lectura, "MANUAL");
                 conexion.commit();
                 return resultado;
             } catch (SQLException | RuntimeException error) {
@@ -35,6 +27,19 @@ public final class Monitoreo {
                 throw error;
             }
         }
+    }
+
+    static Resultado registrarEnTransaccion(Connection conexion, Medicion lectura, String origen) throws SQLException {
+        var dao = new MonitoreoDao(conexion);
+        var registro = dao.registrar(lectura, origen);
+        if (registro.nuevo()) {
+            for (var regla : dao.reglasAplicables(registro.id())) {
+                if (regla.seActivaCon(lectura.valor())) {
+                    dao.crearAlerta(registro.id(), regla, lectura.fecha());
+                }
+            }
+        }
+        return new Resultado(registro.id(), registro.nuevo(), dao.alertas(registro.id()));
     }
 
     public boolean resolver(long idAlerta) throws SQLException {

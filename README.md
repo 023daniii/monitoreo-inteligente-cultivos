@@ -23,12 +23,7 @@ docker compose up -d --build --wait
 
 Usa `.env.example` como plantilla. Java y Python leen `DB_HOST`, `DB_PORT`, `POSTGRES_DB`, `POSTGRES_USER` y `POSTGRES_PASSWORD` del entorno. Compose publica PostgreSQL solo en la interfaz local. Cambia `DB_PORT` si el 5432 ya está ocupado. Las credenciales de ejemplo son para uso local.
 
-En un volumen nuevo, PostgreSQL 17 habilita pgvector 0.8.2 y carga la migración, los catálogos y los datos demo en ese orden. Si conservas el volumen de la primera etapa, puedes añadir los nuevos catálogos sin borrar los datos:
-
-```sh
-docker compose exec -T db psql -X -v ON_ERROR_STOP=1 \
-  -U "$POSTGRES_USER" -d "$POSTGRES_DB" < database/seeds/001_catalogos.sql
-```
+En un volumen nuevo, PostgreSQL 17 habilita pgvector 0.8.2 y carga el esquema y las semillas. En un volumen de la versión anterior, el servicio `preparar-red` amplía el escenario al arrancar. Puedes ejecutar el mismo comando de Compose para actualizar tu instalación con los datos existentes. Cuando termine la preparación, el servicio `medidor` comenzará las mediciones automáticas.
 
 `docker compose down` conserva el volumen. Para recrearlo, usa `docker compose down -v` y vuelve a levantar Compose. **La opción `-v` borra los datos locales.**
 
@@ -98,8 +93,13 @@ docker compose up -d --build --wait
 mvn -f java/pom.xml javafx:run
 ```
 
-En **Monitoreo** selecciona sensor y magnitud, ingresa el valor y registra la lectura. En **Alertas** puedes consultar las recomendaciones y resolver la alerta seleccionada.
+La barra lateral permite elegir entre cuatro terrenos, cada uno con cuatro invernaderos. Cada ficha muestra las dimensiones, el cultivo y tres sensores: temperatura ambiental (°C), humedad del suelo (%) y pH del sustrato.
+
+- **Sensores.** Elige un invernadero y pulsa **Medir sensores** para simular y guardar las tres lecturas en una transacción. Las tarjetas y el historial se actualizan al terminar. Para probar un valor exacto abre **Ingresar una lectura individual**. El historial distingue las mediciones manuales y automáticas y muestra hasta 200 registros.
+- **Medición automática.** Mientras Docker y el servicio `medidor` estén en ejecución, se revisa cada minuto si cada sensor lleva una hora sin registrar su magnitud. Una medición manual reinicia la espera de ese sensor. Al arrancar, el servicio mide los sensores pendientes y utiliza el historial de PostgreSQL para retomar el ciclo. La ventana puede estar cerrada. Se usa la hora de Ecuador continental.
+- **Buzón de alertas.** Muestra las alertas del invernadero seleccionado. Desmarca el filtro local para consultar toda la red. Puedes buscar por sensor, invernadero, terreno o cultivo, filtrar por estado, revisar la lectura y la recomendación y marcar una alerta como resuelta.
+- **Imágenes.** Selecciona o arrastra un archivo JPEG o PNG. Puedes registrar la foto en uno de los cultivos del invernadero elegido o buscar las cinco referencias más próximas en la colección compartida. Pulsa una miniatura para consultar su observación.
 
 **Memoria visual** utiliza el entorno Python descrito arriba. En Windows puedes crearlo con `py -3.12 -m venv .venv` y ejecutar los comandos de instalación sustituyendo `python` por `.venv\Scripts\python.exe`. JavaFX detecta el intérprete del proyecto; para usar otro configura `INVERNADEROS_PYTHON` con su ruta completa. La primera consulta descarga los pesos de CLIP. Conserva la carpeta `datos/fotos/` junto con las copias de seguridad de la base: contiene las fotos propias importadas.
 
-Elige un JPEG o PNG y usa **Buscar similares** para consultar hasta cinco referencias por distancia coseno. Para añadir una referencia usa **Registrar foto propia**, selecciona el cultivo y escribe una etiqueta revisada. También puedes cargar las fotos del conjunto demo mediante las instrucciones de Python. La orientación muestra la etiqueta de la referencia más cercana si su distancia es como máximo 0,10. Es un criterio ilustrativo sin validación agronómica. Una coincidencia visual por sí sola es insuficiente para confirmar una enfermedad.
+Elige un JPEG o PNG y usa **Buscar similares** para consultar hasta cinco referencias por distancia coseno. Para añadir una referencia usa **Registrar foto propia**, selecciona el cultivo y escribe una etiqueta revisada. También puedes cargar las fotos del conjunto demo mediante las instrucciones de Python. Pulsa una foto de los resultados para ver la observación registrada en esa referencia. Puedes cambiar la selección para consultar otra. Una coincidencia visual por sí sola es insuficiente para confirmar una enfermedad.

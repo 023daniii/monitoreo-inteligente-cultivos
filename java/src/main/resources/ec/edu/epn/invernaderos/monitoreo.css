@@ -1,0 +1,38 @@
+.root {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-background-color: #f7f8f3;
+    -fx-accent: #34745b;
+    -fx-focus-color: #468568;
+    -fx-faint-focus-color: transparent;
+}
+.label { -fx-text-fill: #223a31; }
+.page-title { -fx-font-size: 29px; -fx-font-weight: bold; }
+.section-title { -fx-font-size: 18px; -fx-font-weight: bold; }
+.muted, .status { -fx-text-fill: #50665c; }
+.status { -fx-padding: 5 0 0 0; }
+.sidebar { -fx-background-color: #173d32; -fx-padding: 24 15 16 15; }
+.sidebar .brand { -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 24px; }
+.sidebar .sidebar-label { -fx-text-fill: #eef6eb; -fx-font-weight: bold; }
+.sidebar .sidebar-note { -fx-text-fill: #c0d5c8; }
+.sidebar .list-view { -fx-background-color: transparent; -fx-padding: 0; }
+.sidebar .list-cell { -fx-background-color: #173d32; -fx-text-fill: #e6f1e8; -fx-padding: 12 9; }
+.sidebar .list-cell:filled:hover { -fx-background-color: #265343; }
+.sidebar .list-cell:filled:selected { -fx-background-color: #d8ead8; -fx-background-radius: 5; -fx-text-fill: #143b2c; }
+.button { -fx-cursor: hand; -fx-padding: 7 12; -fx-background-color: #e1ebe0; -fx-text-fill: #194533; -fx-background-radius: 5; }
+.button:hover { -fx-background-color: #ccdfca; }
+.primary, .button.primary { -fx-background-color: #236847; -fx-text-fill: white; -fx-font-weight: bold; }
+.button.primary:hover { -fx-background-color: #185738; }
+.tab-pane > .tab-header-area .tab-header-background { -fx-background-color: #e6ece3; }
+.tab-pane > .tab-header-area .tab { -fx-background-color: transparent; -fx-padding: 7 14; }
+.tab-pane > .tab-header-area .tab:selected { -fx-background-color: #ffffff; -fx-border-color: transparent transparent #34745b transparent; -fx-border-width: 0 0 3 0; }
+.tab-pane .tab-label { -fx-text-fill: #294a38; -fx-font-weight: bold; }
+.scroll-pane, .scroll-pane > .viewport { -fx-background-color: transparent; }
+.card { -fx-background-color: white; -fx-padding: 13; -fx-background-radius: 7; -fx-border-color: #d9e4d8; -fx-border-radius: 7; }
+.sensor-value { -fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #236847; }
+.sensor-name { -fx-font-weight: bold; }
+.table-view { -fx-background-color: white; -fx-border-color: #d9e4d8; }
+.table-view .column-header { -fx-background-color: #e6eee4; -fx-padding: 5; }
+.table-row-cell { -fx-cell-size: 32; }
+.table-row-cell:filled:selected { -fx-background-color: #326d51; }
+.table-row-cell:filled:selected .table-cell { -fx-text-fill: white; }

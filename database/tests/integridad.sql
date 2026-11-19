@@ -9,6 +9,23 @@ BEGIN
         RAISE EXCEPTION 'Esquema incompleto';
     END IF;
 
+    -- Limitar la prueba a los dispositivos demo para admitir sensores propios del equipo.
+    IF (WITH modulos AS (
+        SELECT i.id_terreno, i.id_invernadero
+        FROM sensor s JOIN invernadero i USING (id_invernadero)
+        JOIN catalogo tipo ON tipo.id_catalogo = s.id_tipo_sensor
+        WHERE (s.codigo = 'TEMP-001' OR s.codigo ~ '^RED-[1-4]-[1-4]-(TEMP|HUM|PH)$')
+          AND tipo.codigo IN ('SEN_TEMP', 'SEN_HUM_SUELO', 'SEN_PH_SUELO')
+          AND EXISTS (SELECT FROM cultivo c WHERE c.id_invernadero = i.id_invernadero)
+        GROUP BY i.id_terreno, i.id_invernadero
+        HAVING count(*) = 3 AND count(DISTINCT tipo.codigo) = 3
+    ), parcelas AS (
+        SELECT id_terreno FROM modulos GROUP BY id_terreno HAVING count(*) = 4
+    )
+    SELECT count(*) FROM parcelas) <> 4 THEN
+        RAISE EXCEPTION 'Se esperaban 4 terrenos con 4 invernaderos, cultivo y 3 sensores por invernadero';
+    END IF;
+
     BEGIN
         INSERT INTO invernadero (id_terreno, nombre, largo_m, ancho_m, fecha_instalacion)
         VALUES (-1, 'FK inválida', 1, 1, CURRENT_DATE);

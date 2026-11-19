@@ -1,267 +1,350 @@
 package ec.edu.epn.invernaderos;
 
-import com.google.gson.*;
-import ec.edu.epn.invernaderos.config.Conexion;
+import ec.edu.epn.invernaderos.dao.InventarioDao;
+import ec.edu.epn.invernaderos.dao.InventarioDao.*;
 import ec.edu.epn.invernaderos.modelo.Medicion;
 import ec.edu.epn.invernaderos.servicio.Monitoreo;
+import ec.edu.epn.invernaderos.servicio.SimuladorSensores;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Application;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
-import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.Duration;
+import javafx.util.StringConverter;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.Callable;
-import java.util.function.Consumer;
+import java.util.concurrent.*;
+import java.util.function.*;
 
 public final class Interfaz extends Application {
+    private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
+    private final InventarioDao inventario = new InventarioDao();
+    private final SimuladorSensores simulador = new SimuladorSensores();
+    private final ExecutorService consultas = Executors.newFixedThreadPool(2, tarea -> {
+        var hilo = new Thread(tarea, "consulta-invernadero");
+        hilo.setDaemon(true);
+        return hilo;
+    });
+    private final ComboBox<Terreno> terrenos = new ComboBox<>();
+    private final ListView<Invernadero> invernaderos = new ListView<>();
+    private final Label red = etiqueta("", "sidebar-note");
+    private final Label parcela = etiqueta("", "sidebar-note");
+    private final Label titulo = etiqueta("Selecciona un invernadero", "page-title");
+    private final Label ubicacion = etiqueta("", "muted");
+    private final Label cultivos = etiqueta("", "muted");
+    private final Label estado = etiqueta("", "status");
+    private final FlowPane tarjetas = new FlowPane(12, 12);
+    private final TableView<Lectura> historial = new TableView<>();
+    private final ComboBox<Sensor> sensorManual = new ComboBox<>();
+    private final ComboBox<Magnitud> magnitudManual = new ComboBox<>();
+    private final Button medir = new Button("Medir sensores");
+    private final Button registrar = new Button("Guardar lectura");
+    private final Button recargar = new Button("Actualizar inventario");
+    private final BuzonAlertas buzon = new BuzonAlertas();
+    private final PanelFotos fotos = new PanelFotos();
     private final TabPane vistas = new TabPane();
-    private final Label estado = new Label();
-    private final ComboBox<String> sensores = new ComboBox<>(), magnitudes = new ComboBox<>();
-    private final ComboBox<List<String>> cultivos = new ComboBox<>();
-    private final Monitoreo monitoreo = new Monitoreo();
-    private final TableView<List<String>> lecturas = tabla("Fecha", "Invernadero", "Sensor", "Magnitud", "Valor", "Unidad");
-    private final TableView<List<String>> alertas = tabla("ID", "Fecha", "Cultivo", "Sensor", "Severidad", "Recomendación", "Estado");
-    private Path foto;
-    private final Path raiz = Files.isDirectory(Path.of("python/memoria_visual"))
-        ? Path.of("").toAbsolutePath() : Path.of("..").toAbsolutePath().normalize();
+    private final Timeline refresco = new Timeline(new KeyFrame(Duration.minutes(1), e -> actualizarVisible()));
+    private int peticion;
+    private boolean midiendo;
+    private boolean cargando;
+    private boolean detalleDisponible;
+    private Map<Integer,String> cultivosVisibles = Map.of();
 
     public static void main(String[] args) { launch(args); }
 
     @Override public void start(Stage ventana) {
-        vistas.getTabs().addAll(tab("Monitoreo", panelMonitoreo()), tab("Alertas", panelAlertas()),
-                                tab("Memoria visual", panelFotos(ventana)));
-        var actualizar = new Button("Actualizar datos");
-        actualizar.disableProperty().bind(vistas.disableProperty());
-        actualizar.setOnAction(e -> actualizar());
-        var barra = new HBox(16, actualizar, estado);
-        barra.setPadding(new Insets(12));
-        var raizVentana = new BorderPane(vistas);
-        raizVentana.setBottom(barra);
-        ventana.setTitle("Monitoreo de invernaderos");
-        ventana.setScene(new Scene(raizVentana, 1050, 650));
+        var principal = new BorderPane();
+        principal.setLeft(navegacion());
+        vistas.setId("vistas");
+        vistas.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        vistas.getTabs().addAll(new Tab("Sensores", panelSensores()), new Tab("Buzón de alertas", buzon),
+                                new Tab("Imágenes", fotos));
+        vistas.getSelectionModel().selectedIndexProperty().addListener((o, antes, ahora) -> actualizarVisible());
+        var contenido = new VBox(8, ubicacion, titulo, cultivos, vistas, estado);
+        contenido.setPadding(new Insets(22));
+        VBox.setVgrow(vistas, Priority.ALWAYS);
+        principal.setCenter(contenido);
+        var escena = new Scene(principal, 1170, 760);
+        escena.getStylesheets().add(Objects.requireNonNull(getClass().getResource("monitoreo.css")).toExternalForm());
+        ventana.setScene(escena);
+        ventana.setTitle("Invernaderos · Centro de monitoreo");
+        ventana.setMinWidth(800);
+        ventana.setMinHeight(560);
         ventana.show();
-        actualizar();
+        refresco.setCycleCount(Timeline.INDEFINITE);
+        refresco.play();
+        cargarInventario();
     }
 
-    private Tab tab(String titulo, VBox panel) {
-        panel.setPadding(new Insets(18));
-        var tab = new Tab(titulo, panel);
-        tab.setClosable(false);
-        return tab;
+    @Override public void stop() {
+        refresco.stop();
+        consultas.shutdownNow();
     }
 
-    private static TableView<List<String>> tabla(String... titulos) {
-        var tabla = new TableView<List<String>>();
-        for (int i = 0; i < titulos.length; i++) {
-            int columna = i;
-            var campo = new TableColumn<List<String>, String>(titulos[i]);
-            campo.setCellValueFactory(fila -> new ReadOnlyStringWrapper(fila.getValue().get(columna)));
-            tabla.getColumns().add(campo);
-        }
-        tabla.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        tabla.setPlaceholder(new Label("Sin registros"));
-        VBox.setVgrow(tabla, Priority.ALWAYS);
-        return tabla;
-    }
-
-    private VBox panelMonitoreo() {
-        var valor = new TextField();
-        valor.setPromptText("Valor medido");
-        var guardar = new Button("Registrar lectura");
-        guardar.setOnAction(e -> {
-            try {
-                if (sensores.getValue() == null || magnitudes.getValue() == null)
-                    throw new IllegalArgumentException("Selecciona sensor y magnitud.");
-                var lectura = new Medicion(sensores.getValue(), magnitudes.getValue(), LocalDateTime.now(),
-                    new BigDecimal(valor.getText().trim().replace(',', '.')));
-                tarea("Registrando lectura…", () -> monitoreo.registrar(lectura), r -> {
-                    valor.clear();
-                    cargarHistorial("Medición " + r.idMedicion() + " registrada. Alertas: " + r.alertas().size());
-                });
-            } catch (NumberFormatException | ArithmeticException error) {
-                estado.setText("Ingresa un número con hasta cuatro decimales.");
-            } catch (IllegalArgumentException error) { estado.setText(error.getMessage()); }
-        });
-        return new VBox(12, new Label("Simular lectura"), new FlowPane(8, 8,
-            new Label("Sensor"), sensores, new Label("Magnitud"), magnitudes, valor, guardar),
-            new Label("Últimas 200 mediciones"), lecturas);
-    }
-
-    private VBox panelAlertas() {
-        var resolver = new Button("Resolver alerta seleccionada");
-        resolver.setOnAction(e -> {
-            var fila = alertas.getSelectionModel().getSelectedItem();
-            if (fila == null) { estado.setText("Selecciona una alerta."); return; }
-            tarea("Resolviendo alerta…", () -> monitoreo.resolver(Long.parseLong(fila.get(0))),
-                ok -> cargarHistorial(ok ? "Alerta resuelta." : "La alerta ya está resuelta o no admite resolución."));
-        });
-        return new VBox(12, new Label("Alertas pendientes y últimas resueltas"), alertas, resolver);
-    }
-
-    private static List<List<String>> consultar(String sql) throws Exception {
-        try (var c = Conexion.abrir(); var st = c.createStatement(); var rs = st.executeQuery(sql)) {
-            List<List<String>> filas = new ArrayList<>();
-            while (rs.next()) {
-                List<String> fila = new ArrayList<>();
-                for (int i = 1; i <= rs.getMetaData().getColumnCount(); i++) fila.add(rs.getString(i));
-                filas.add(fila);
+    private VBox navegacion() {
+        parcela.setMinHeight(Region.USE_PREF_SIZE);
+        terrenos.setId("terrenos");
+        terrenos.setMaxWidth(Double.MAX_VALUE);
+        mostrarNombre(terrenos, Terreno::nombre);
+        invernaderos.setId("invernaderos");
+        invernaderos.setPlaceholder(new Label("Sin invernaderos activos"));
+        invernaderos.setCellFactory(v -> new ListCell<>() {
+            @Override protected void updateItem(Invernadero finca, boolean vacia) {
+                super.updateItem(finca, vacia);
+                setText(vacia || finca == null ? null : finca.nombre());
+                setWrapText(true);
             }
-            return filas;
-        }
-    }
-
-    private void actualizar() {
-        tarea("Conectando a PostgreSQL…", () -> List.of(
-            consultar("SELECT codigo FROM sensor WHERE estado ORDER BY codigo"),
-            consultar("SELECT h.codigo FROM catalogo h JOIN catalogo p ON p.id_catalogo=h.id_padre WHERE p.codigo='CAT_TIPO_MEDICION' AND h.estado ORDER BY h.codigo"),
-            consultar("SELECT id_cultivo, nombre FROM cultivo ORDER BY nombre, id_cultivo")
-        ), datos -> {
-            sensores.getItems().setAll(datos.get(0).stream().map(f -> f.get(0)).toList());
-            magnitudes.getItems().setAll(datos.get(1).stream().map(f -> f.get(0)).toList());
-            sensores.getSelectionModel().selectFirst();
-            magnitudes.getSelectionModel().selectFirst();
-            if (magnitudes.getItems().contains("MED_TEMP_AMB")) magnitudes.setValue("MED_TEMP_AMB");
-            cultivos.getItems().setAll(datos.get(2));
-            cultivos.getSelectionModel().selectFirst();
-            cargarHistorial("Datos actualizados.");
         });
-    }
-
-    private void cargarHistorial(String mensaje) {
-        tarea("Consultando historial…", () -> List.of(consultar("""
-            SELECT m.fecha_hora, i.nombre, s.codigo, t.nombre, m.valor, t.unidad
-            FROM medicion m JOIN sensor s USING(id_sensor) JOIN invernadero i USING(id_invernadero)
-            JOIN catalogo t ON t.id_catalogo=m.id_tipo_medicion
-            ORDER BY m.fecha_hora DESC, m.id_medicion DESC LIMIT 200
-            """), consultar("""
-            SELECT a.id_alerta, a.fecha_hora, c.nombre, s.codigo, sev.nombre, r.recomendacion, est.nombre
-            FROM alerta a JOIN cultivo c USING(id_cultivo) JOIN regla r USING(id_regla)
-            JOIN medicion m USING(id_medicion) JOIN sensor s USING(id_sensor)
-            JOIN catalogo sev ON sev.id_catalogo=r.id_severidad JOIN catalogo est ON est.id_catalogo=a.id_estado
-            ORDER BY (a.fecha_resolucion IS NULL) DESC, a.id_alerta DESC
-            """)), datos -> {
-            lecturas.getItems().setAll(datos.get(0));
-            alertas.getItems().setAll(datos.get(1));
-            estado.setText(mensaje);
+        terrenos.valueProperty().addListener((o, anterior, terreno) -> {
+            invernaderos.getItems().setAll(terreno == null ? List.of() : terreno.invernaderos());
+            parcela.setText(terreno == null ? "" : terreno.direccion() + "\n" + numero(terreno.area()) + " m²");
+            invernaderos.getSelectionModel().selectFirst();
         });
+        invernaderos.getSelectionModel().selectedItemProperty().addListener((o, a, b) -> seleccionar());
+        recargar.setOnAction(e -> cargarInventario());
+        var menu = new VBox(12, etiqueta("Invernaderos", "brand"), red, new Separator(),
+            etiqueta("Terreno", "sidebar-label"), terrenos, parcela, new Separator(),
+            etiqueta("Invernaderos del terreno", "sidebar-label"), invernaderos, recargar);
+        menu.getStyleClass().add("sidebar");
+        menu.setPrefWidth(244);
+        menu.setMinWidth(205);
+        VBox.setVgrow(invernaderos, Priority.ALWAYS);
+        return menu;
     }
 
-    private VBox panelFotos(Stage ventana) {
-        var elegir = new Button("Elegir foto");
-        var buscar = new Button("Buscar similares");
-        var guardar = new Button("Registrar foto propia");
-        var etiqueta = new TextField();
-        etiqueta.setPromptText("Etiqueta observada (opcional)");
-        var vista = new ImageView();
-        vista.setFitHeight(115);
-        vista.setPreserveRatio(true);
-        var resultados = new VBox(8);
-        var scroll = new ScrollPane(resultados);
+    private VBox panelSensores() {
+        medir.setId("medir");
+        medir.getStyleClass().add("primary");
+        medir.setOnAction(e -> medirTodos());
+        var cabecera = new HBox(12, etiqueta("Sensores instalados", "section-title"), espacio(), medir);
+        cabecera.setAlignment(Pos.CENTER_LEFT);
+        tarjetas.setPrefWrapLength(650);
+        historial.setId("historial");
+        historial.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        historial.setPlaceholder(new Label("Aún no hay mediciones en este invernadero."));
+        columna("Fecha y hora", f -> FECHA.format(f.fecha()));
+        columna("Sensor", Lectura::sensor);
+        columna("Magnitud", Lectura::magnitud);
+        columna("Valor", f -> numero(f.valor()));
+        columna("Unidad", Lectura::unidad);
+        columna("Origen", f -> switch (Objects.toString(f.origen(), "")) {
+            case "MANUAL" -> "Manual";
+            case "AUTOMATICA" -> "Automática";
+            default -> "Sin registrar";
+        });
+        historial.setPrefHeight(270);
+        var cuerpo = new VBox(12, cabecera, etiqueta("Ciclo automático cada hora · Sensores simulados", "muted"),
+            tarjetas, formularioIndividual(), etiqueta("Historial reciente", "section-title"), historial);
+        cuerpo.setPadding(new Insets(16, 6, 8, 4));
+        var scroll = new ScrollPane(cuerpo);
         scroll.setFitToWidth(true);
+        var panel = new VBox(scroll);
         VBox.setVgrow(scroll, Priority.ALWAYS);
-        var orientacion = new Label();
-        orientacion.setWrapText(true);
-        elegir.setOnAction(e -> {
-            var selector = new FileChooser();
-            selector.getExtensionFilters().add(new FileChooser.ExtensionFilter("Fotos JPEG o PNG", "*.jpg", "*.jpeg", "*.png", "*.JPG", "*.JPEG", "*.PNG"));
-            var archivo = selector.showOpenDialog(ventana);
-            if (archivo == null) return;
-            foto = archivo.toPath();
-            vista.setImage(imagen(foto, 180));
-            resultados.getChildren().clear();
-            orientacion.setText("");
-            estado.setText(archivo.getName());
-        });
-        buscar.setOnAction(e -> {
-            if (foto == null) { estado.setText("Elige una foto para comparar."); return; }
-            resultados.getChildren().clear();
-            orientacion.setText("");
-            tarea("Calculando similitudes con CLIP…", () -> python("buscar", foto.toString()).getAsJsonArray(), filas -> {
-                for (var item : filas) {
-                    var fila = item.getAsJsonObject();
-                    var ruta = raiz.resolve(fila.get("ruta_imagen").getAsString()).normalize();
-                    var mini = new ImageView();
-                    if (ruta.startsWith(raiz) && Files.isRegularFile(ruta)) mini.setImage(imagen(ruta, 100));
-                    mini.setFitWidth(90);
-                    mini.setPreserveRatio(true);
-                    var nombre = texto(fila, "etiqueta", "Sin etiqueta");
-                    var distancia = fila.get("distancia").getAsDouble();
-                    var detalle = new Label(String.format("%s · %s%n%s · Distancia coseno %.4f", nombre,
-                        ruta.getFileName(), texto(fila, "fuente", fila.get("origen").getAsString()), distancia));
-                    resultados.getChildren().add(new HBox(12, mini, detalle));
-                    // Umbral ilustrativo de la demo, sin calibración clínica o agronómica.
-                    if (resultados.getChildren().size() == 1 && distancia <= 0.10 && !fila.get("etiqueta").isJsonNull())
-                        orientacion.setText("Orientación por semejanza: " + nombre + ". Etiqueta de la referencia más cercana; requiere revisión.");
-                }
-                if (orientacion.getText().isEmpty()) orientacion.setText(filas.isEmpty()
-                    ? "Colección vacía. Registra fotos de referencia para comparar."
-                    : "Sin referencia cercana etiquetada para sugerir un diagnóstico.");
-                estado.setText(filas.size() + " coincidencias.");
-            });
-        });
-        guardar.setOnAction(e -> {
-            var cultivo = cultivos.getValue();
-            if (foto == null || cultivo == null) { estado.setText("Selecciona una foto y su cultivo."); return; }
-            String valor = etiqueta.getText().trim();
-            tarea("Vectorizando y registrando…", () -> python("registrar", foto.toString(), "--cultivo", cultivo.get(0),
-                "--etiqueta", valor).getAsJsonObject(), r -> estado.setText("Foto " + r.get("id") +
-                (r.get("nueva").getAsBoolean() ? " registrada." : " ya registrada.")));
-        });
-        return new VBox(12, new HBox(10, elegir, buscar), vista,
-            new FlowPane(8, 8, new Label("Cultivo"), cultivos, etiqueta, guardar), orientacion, scroll);
+        return panel;
     }
 
-    private static Image imagen(Path ruta, double ancho) {
-        return new Image(ruta.toUri().toString(), ancho, 0, true, true);
-    }
-
-    private static String texto(JsonObject fila, String campo, String defecto) {
-        return fila.get(campo).isJsonNull() ? defecto : fila.get(campo).getAsString();
-    }
-
-    private JsonElement python(String... args) throws Exception {
-        boolean windows = System.getProperty("os.name").startsWith("Windows");
-        var local = raiz.resolve(windows ? ".venv/Scripts/python.exe" : ".venv/bin/python");
-        String ejecutable = System.getenv().getOrDefault("INVERNADEROS_PYTHON",
-            Files.isRegularFile(local) ? local.toString() : (windows ? "python" : "python3"));
-        var comando = new ArrayList<>(List.of(ejecutable, "-m", "memoria_visual.escritorio"));
-        comando.addAll(List.of(args));
-        var proceso = new ProcessBuilder(comando).directory(raiz.toFile());
-        proceso.environment().put("PYTHONPATH", raiz.resolve("python").toString());
-        proceso.environment().put("PYTHONIOENCODING", "utf-8");
-        var log = Files.createTempFile("memoria-visual-", ".log");
-        try {
-            var hijo = proceso.redirectError(log.toFile()).start();
-            String salida = new String(hijo.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            if (hijo.waitFor() != 0) {
-                var lineas = Files.readAllLines(log, StandardCharsets.UTF_8);
-                throw new IllegalStateException(lineas.isEmpty() ? "Error al procesar foto." : lineas.get(lineas.size()-1));
+    private TitledPane formularioIndividual() {
+        mostrarNombre(sensorManual, Sensor::codigo);
+        mostrarNombre(magnitudManual, Magnitud::nombre);
+        var valor = new TextField();
+        valor.setPromptText("Valor");
+        valor.setPrefColumnCount(6);
+        registrar.setOnAction(e -> {
+            var sensor = sensorManual.getValue();
+            var magnitud = magnitudManual.getValue();
+            var finca = actual();
+            if (sensor == null || magnitud == null || finca == null) return;
+            try {
+                var lectura = new Medicion(sensor.codigo(), magnitud.codigo(), LocalDateTime.now(java.time.ZoneId.of("America/Guayaquil")),
+                    new BigDecimal(valor.getText().trim().replace(',', '.')));
+                iniciarMedida();
+                ejecutar(() -> new Monitoreo().registrar(lectura), r -> {
+                    valor.clear();
+                    finMedida(finca, "Lectura guardada · " + r.alertas().size() + " alertas.");
+                }, this::errorMedida);
+            } catch (NumberFormatException | ArithmeticException ex) {
+                estado.setText("Escribe un valor numérico con un máximo de cuatro decimales.");
             }
-            return JsonParser.parseString(salida);
-        } finally { Files.deleteIfExists(log); }
+        });
+        var pane = new TitledPane("Ingresar una lectura individual", new FlowPane(8, 8,
+            sensorManual, magnitudManual, valor, registrar));
+        pane.setExpanded(false);
+        pane.setAnimated(false);
+        return pane;
     }
 
-    private <T> void tarea(String mensaje, Callable<T> trabajo, Consumer<T> terminado) {
-        vistas.setDisable(true);
-        estado.setText(mensaje);
-        var tarea = new Task<T>() {
-            @Override protected T call() throws Exception { return trabajo.call(); }
-        };
-        tarea.setOnSucceeded(e -> { vistas.setDisable(false); terminado.accept(tarea.getValue()); });
-        tarea.setOnFailed(e -> { vistas.setDisable(false); estado.setText(tarea.getException().getMessage()); });
-        var hilo = new Thread(tarea);
-        hilo.setDaemon(true);
-        hilo.start();
+    private record Red(List<Terreno> terrenos, List<Magnitud> magnitudes) {}
+
+    private void cargarInventario() {
+        var previo = actual();
+        var terrenoPrevio = terrenos.getValue();
+        recargar.setDisable(true);
+        estado.setText("Consultando terrenos e invernaderos…");
+        ejecutar(() -> new Red(inventario.terrenos(), inventario.magnitudes()), datos -> {
+            recargar.setDisable(false);
+            magnitudManual.getItems().setAll(datos.magnitudes());
+            var temperatura = datos.magnitudes().stream().filter(m -> m.codigo().equals("MED_TEMP_AMB")).findFirst();
+            magnitudManual.setValue(temperatura.orElse(datos.magnitudes().stream().findFirst().orElse(null)));
+            terrenos.getItems().setAll(datos.terrenos());
+            red.setText(datos.terrenos().size() + " terrenos · " +
+                datos.terrenos().stream().mapToInt(t -> t.invernaderos().size()).sum() + " invernaderos");
+            terrenos.setValue(datos.terrenos().stream().filter(t -> terrenoPrevio != null && t.id() == terrenoPrevio.id())
+                .findFirst().orElse(datos.terrenos().stream().findFirst().orElse(null)));
+            if (previo != null) invernaderos.getItems().stream().filter(i -> i.id() == previo.id())
+                .findFirst().ifPresent(i -> invernaderos.getSelectionModel().select(i));
+            if (actual() == null) seleccionar();
+            else cargarDetalle("");
+        }, error -> { recargar.setDisable(false); mostrarError(error); });
     }
+
+    private Invernadero actual() { return invernaderos.getSelectionModel().getSelectedItem(); }
+
+    private void seleccionar() {
+        var i = actual();
+        peticion++;
+        cargando = false;
+        detalleDisponible = false;
+        botones();
+        cultivosVisibles = Map.of();
+        tarjetas.getChildren().clear();
+        historial.getItems().clear();
+        sensorManual.getItems().clear();
+        cultivos.setText("");
+        var terreno = terrenos.getValue();
+        titulo.setText(i == null ? "Selecciona un invernadero" : i.nombre());
+        ubicacion.setText(i == null || terreno == null ? "" : terreno.nombre() + "   /   " +
+            numero(i.largo()) + " × " + numero(i.ancho()) + " m");
+        fotos.setInvernadero(i == null ? "" : i.nombre(), Map.of());
+        if (vistas.getSelectionModel().getSelectedIndex() == 1) buzon.actualizar(i == null ? null : i.id());
+        if (i != null) cargarDetalle("");
+        else estado.setText("Selecciona un terreno con invernaderos activos.");
+    }
+
+    private void actualizarVisible() {
+        var i = actual();
+        if (vistas.getSelectionModel().getSelectedIndex() == 1) {
+            buzon.actualizar(i == null ? null : i.id());
+        } else if (i != null && !cargando && !midiendo && vistas.getSelectionModel().getSelectedIndex() == 0) {
+            cargarDetalle("");
+        }
+    }
+
+    private void cargarDetalle(String mensaje) {
+        var finca = actual();
+        if (finca == null) return;
+        int solicitud = ++peticion;
+        cargando = true;
+        ejecutar(() -> inventario.detalle(finca.id()), d -> {
+            if (solicitud != peticion) return;
+            cargando = false;
+            detalleDisponible = true;
+            tarjetas.getChildren().clear();
+            for (var sensor : d.sensores()) tarjetas.getChildren().add(tarjeta(sensor));
+            if (d.sensores().isEmpty()) tarjetas.getChildren().add(new Label("Sin sensores activos."));
+            historial.getItems().setAll(d.historial());
+            var elegido = sensorManual.getValue();
+            sensorManual.getItems().setAll(d.sensores());
+            var sensor = d.sensores().stream().filter(s -> elegido != null && s.id() == elegido.id()).findFirst();
+            sensorManual.setValue(sensor.orElse(d.sensores().stream().findFirst().orElse(null)));
+            Map<Integer,String> mapa = new LinkedHashMap<>();
+            d.cultivos().forEach(c -> mapa.put(c.id(), c.nombre()));
+            cultivos.setText(mapa.isEmpty() ? "Sin cultivos vigentes" : "Cultivos · " + String.join(", ", mapa.values()));
+            if (!mapa.equals(cultivosVisibles)) {
+                cultivosVisibles = mapa;
+                fotos.setInvernadero(finca.nombre(), mapa);
+            }
+            botones();
+            estado.setText(mensaje.isEmpty() ? "Última actualización · " + FECHA.format(LocalDateTime.now(java.time.ZoneId.of("America/Guayaquil"))) : mensaje);
+        }, ex -> { if (solicitud == peticion) { cargando = false; mostrarError(ex); } });
+    }
+
+    private VBox tarjeta(Sensor sensor) {
+        var tarjeta = new VBox(5, etiqueta(sensor.magnitud(), "sensor-name"),
+            etiqueta(sensor.valor() == null ? "Sin lectura" : numero(sensor.valor()) + " " +
+                Objects.toString(sensor.unidad(), ""), "sensor-value"),
+            etiqueta(sensor.codigo() + " · " + sensor.ubicacion(), "muted"),
+            etiqueta(sensor.fecha() == null ? "Esperando primera medición" : FECHA.format(sensor.fecha()), "muted"));
+        tarjeta.setPrefWidth(205);
+        tarjeta.getStyleClass().add("card");
+        return tarjeta;
+    }
+
+    private void medirTodos() {
+        var finca = actual();
+        if (finca == null || midiendo) return;
+        iniciarMedida();
+        ejecutar(() -> simulador.medir(finca.id()), r ->
+            finMedida(finca, r.mediciones() + " mediciones guardadas · " + r.alertas() + " alertas nuevas."), this::errorMedida);
+    }
+
+    private void iniciarMedida() {
+        midiendo = true;
+        botones();
+        estado.setText("Guardando mediciones…");
+    }
+
+    private void finMedida(Invernadero finca, String mensaje) {
+        midiendo = false;
+        botones();
+        if (actual() != null && actual().id() == finca.id()) {
+            cargarDetalle(mensaje);
+            if (vistas.getSelectionModel().getSelectedIndex() == 1) buzon.actualizar(finca.id());
+        }
+    }
+
+    private void errorMedida(Throwable error) {
+        midiendo = false;
+        botones();
+        mostrarError(error);
+    }
+
+    private void botones() {
+        boolean bloquear = midiendo || !detalleDisponible || sensorManual.getItems().isEmpty();
+        medir.setDisable(bloquear);
+        registrar.setDisable(bloquear || magnitudManual.getItems().isEmpty());
+    }
+
+    private <T> void ejecutar(Callable<T> operacion, Consumer<T> exito, Consumer<Throwable> fallo) {
+        Task<T> tarea = new Task<>() {
+            @Override protected T call() throws Exception { return operacion.call(); }
+        };
+        tarea.setOnSucceeded(e -> exito.accept(tarea.getValue()));
+        tarea.setOnFailed(e -> fallo.accept(tarea.getException()));
+        consultas.execute(tarea);
+    }
+
+    private void mostrarError(Throwable ex) { estado.setText("Error al consultar o guardar: " + ex.getMessage()); }
+
+    private void columna(String titulo, Function<Lectura,String> texto) {
+        var col = new TableColumn<Lectura,String>(titulo);
+        col.setCellValueFactory(f -> new ReadOnlyStringWrapper(texto.apply(f.getValue())));
+        historial.getColumns().add(col);
+    }
+
+    private static <T> void mostrarNombre(ComboBox<T> combo, Function<T,String> nombre) {
+        combo.setConverter(new StringConverter<>() {
+            @Override public String toString(T valor) { return valor == null ? "" : nombre.apply(valor); }
+            @Override public T fromString(String texto) { throw new UnsupportedOperationException(); }
+        });
+    }
+
+    private static Region espacio() { var r = new Region(); HBox.setHgrow(r, Priority.ALWAYS); return r; }
+    private static Label etiqueta(String texto, String estilo) {
+        var label = new Label(texto);
+        label.setWrapText(true);
+        label.getStyleClass().add(estilo);
+        return label;
+    }
+    private static String numero(BigDecimal valor) { return valor.stripTrailingZeros().toPlainString(); }
 }

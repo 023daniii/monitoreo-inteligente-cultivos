@@ -19,9 +19,14 @@ public final class MonitoreoDao {
     public record Registro(long id, boolean nuevo) {}
 
     public Registro registrar(Medicion lectura) throws SQLException {
+        return registrar(lectura, null);
+    }
+
+    public Registro registrar(Medicion lectura, String origen) throws SQLException {
         String insertar = """
-            INSERT INTO medicion (id_sensor, id_tipo_medicion, fecha_hora, valor)
-            SELECT s.id_sensor, t.id_catalogo, ?, ?
+            INSERT INTO medicion (id_sensor, id_tipo_medicion, fecha_hora, valor, metadatos)
+            SELECT s.id_sensor, t.id_catalogo, ?, ?,
+                   NULLIF(jsonb_strip_nulls(jsonb_build_object('origen', ?::text)), '{}'::jsonb)
             FROM sensor s JOIN invernadero i USING (id_invernadero)
             CROSS JOIN catalogo t JOIN catalogo categoria ON categoria.id_catalogo = t.id_padre
             WHERE s.codigo = ? AND t.codigo = ? AND s.estado AND i.estado AND t.estado
@@ -33,10 +38,11 @@ public final class MonitoreoDao {
         try (var sentencia = conexion.prepareStatement(insertar)) {
             sentencia.setObject(1, lectura.fecha());
             sentencia.setBigDecimal(2, lectura.valor());
-            sentencia.setString(3, lectura.sensor());
-            sentencia.setString(4, lectura.magnitud());
-            sentencia.setObject(5, lectura.fecha().toLocalDate());
+            sentencia.setString(3, origen);
+            sentencia.setString(4, lectura.sensor());
+            sentencia.setString(5, lectura.magnitud());
             sentencia.setObject(6, lectura.fecha().toLocalDate());
+            sentencia.setObject(7, lectura.fecha().toLocalDate());
             try (var filas = sentencia.executeQuery()) {
                 if (filas.next()) {
                     return new Registro(filas.getLong(1), true);
@@ -131,10 +137,10 @@ public final class MonitoreoDao {
 
     public boolean resolver(long idAlerta) throws SQLException {
         String actualizar = """
-            UPDATE alerta SET fecha_resolucion = CURRENT_TIMESTAMP,
-                fecha_modificacion = CURRENT_TIMESTAMP,
+            UPDATE alerta SET fecha_resolucion = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil'),
+                fecha_modificacion = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil'),
                 id_estado = (SELECT id_catalogo FROM catalogo WHERE codigo = 'EST_RESUELTA')
-            WHERE id_alerta = ? AND fecha_resolucion IS NULL AND fecha_hora <= CURRENT_TIMESTAMP
+            WHERE id_alerta = ? AND fecha_resolucion IS NULL AND fecha_hora <= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil')
             """;
         try (var sentencia = conexion.prepareStatement(actualizar)) {
             sentencia.setLong(1, idAlerta);
