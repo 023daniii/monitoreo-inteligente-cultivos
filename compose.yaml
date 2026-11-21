@@ -1,0 +1,32 @@
+services:
+  db:
+    build: ./database
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-monitoreo_inteligente_cultivos}
+      POSTGRES_USER: ${POSTGRES_USER:-invernadero}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-invernadero_local}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  medidor:
+    build: ./java
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-monitoreo_inteligente_cultivos}
+      POSTGRES_USER: ${POSTGRES_USER:-invernadero}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-invernadero_local}
+
+volumes:
+  postgres_data:

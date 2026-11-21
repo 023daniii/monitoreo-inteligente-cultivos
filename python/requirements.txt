@@ -1,0 +1,5 @@
+torch==2.7.1
+torchvision==0.22.1
+Pillow==11.3.0
+psycopg[binary]==3.2.13
+clip @ https://codeload.github.com/openai/CLIP/zip/a1d071733d7111c9c014f024669f959182114e33

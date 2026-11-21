@@ -1,0 +1,42 @@
+.foto-panel {
+    -fx-spacing: 8;
+}
+.foto-scroll, .foto-scroll > .viewport {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+.foto-tarjeta {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 10;
+    -fx-border-color: #dce4dc;
+    -fx-border-radius: 10;
+    -fx-padding: 16;
+}
+.foto-titulo {
+    -fx-font-size: 17px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #163a30;
+}
+.foto-marco {
+    -fx-background-color: #edf2ed;
+    -fx-background-radius: 8;
+}
+.foto-primario {
+    -fx-background-color: #236348;
+    -fx-text-fill: white;
+}
+.foto-referencia {
+    -fx-padding: 6;
+    -fx-border-color: #dce4dc;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+}
+.foto-referencia:selected {
+    -fx-background-color: #e5f2e9;
+    -fx-border-color: #42885e;
+}
+.foto-observacion {
+    -fx-padding: 8;
+    -fx-background-color: #f1f5ed;
+    -fx-background-radius: 5;
+}
