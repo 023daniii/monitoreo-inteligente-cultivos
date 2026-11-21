@@ -43,26 +43,15 @@ public final class Main {
     }
 
     private static void demo() throws SQLException {
-<<<<<<< HEAD
         LocalDateTime inicio = LocalDateTime.of(2026, 11, 16, 10, 0);
         String[] valores = {"25", "30", "34.2"};
         for (int i = 0; i < valores.length; i++) {
             imprimir(new Medicion("SEN-TEMP-B1", "MED_TEMP_AMB", inicio.plusMinutes(i), new BigDecimal(valores[i])));
-=======
-        LocalDateTime inicio = LocalDateTime.of(2026, 2, 3, 10, 0);
-        String[] valores = {"25", "30", "34.2"};
-        for (int i = 0; i < valores.length; i++) {
-            imprimir(new Medicion("TEMP-001", "MED_TEMP_AMB", inicio.plusMinutes(i), new BigDecimal(valores[i])));
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
         }
     }
 
     private static void simular(Scanner entrada) throws SQLException {
-<<<<<<< HEAD
         System.out.println("Código de sensor (ejemplo SEN-TEMP-A2):");
-=======
-        System.out.println("Código de sensor (ejemplo TEMP-001):");
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
         String sensor = entrada.nextLine().trim();
         System.out.println("Código de magnitud (ejemplo MED_TEMP_AMB):");
         String magnitud = entrada.nextLine().trim();

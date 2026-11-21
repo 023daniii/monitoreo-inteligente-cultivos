@@ -15,41 +15,12 @@ services:
       timeout: 5s
       retries: 30
 
-<<<<<<< HEAD
-=======
-  preparar-red:
-    build: ./database
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      PGHOST: db
-      PGDATABASE: ${POSTGRES_DB:-monitoreo_inteligente_cultivos}
-      PGUSER: ${POSTGRES_USER:-invernadero}
-      PGPASSWORD: ${POSTGRES_PASSWORD:-invernadero_local}
-    entrypoint: ["psql"]
-    command:
-      - "-X"
-      - "-v"
-      - "ON_ERROR_STOP=1"
-      - "-f"
-      - "/docker-entrypoint-initdb.d/02-catalogos.sql"
-      - "-f"
-      - "/docker-entrypoint-initdb.d/04-red.sql"
-    restart: "no"
-
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
   medidor:
     build: ./java
     restart: unless-stopped
     depends_on:
-<<<<<<< HEAD
       db:
         condition: service_healthy
-=======
-      preparar-red:
-        condition: service_completed_successfully
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
     environment:
       DB_HOST: db
       DB_PORT: 5432

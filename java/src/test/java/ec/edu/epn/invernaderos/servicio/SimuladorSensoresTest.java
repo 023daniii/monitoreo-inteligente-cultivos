@@ -4,27 +4,17 @@ import ec.edu.epn.invernaderos.config.Conexion;
 import ec.edu.epn.invernaderos.modelo.Medicion;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-<<<<<<< HEAD
 import java.util.Random;
-=======
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-<<<<<<< HEAD
 import static org.junit.jupiter.api.Assertions.assertTrue;
-=======
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
 
 class SimuladorSensoresTest {
     @Test
     void lecturaIndividualRequiereTerrenoYTipoDeSensorActivos() throws Exception {
-<<<<<<< HEAD
         var lectura = new Medicion("SEN-TEMP-A1", "MED_TEMP_AMB", LocalDateTime.now(), BigDecimal.TEN);
-=======
-        var lectura = new Medicion("TEMP-001", "MED_TEMP_AMB", LocalDateTime.now(), BigDecimal.TEN);
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
         try (var conexion = Conexion.abrir(); var sql = conexion.createStatement()) {
             conexion.setAutoCommit(false);
             try {
@@ -35,11 +25,7 @@ class SimuladorSensoresTest {
                 conexion.rollback(punto);
                 assertEquals(1, sql.executeUpdate("""
                     UPDATE terreno SET estado = false WHERE id_terreno = (
-<<<<<<< HEAD
                         SELECT id_terreno FROM invernadero JOIN sensor USING (id_invernadero) WHERE codigo = 'SEN-TEMP-A1'
-=======
-                        SELECT id_terreno FROM invernadero JOIN sensor USING (id_invernadero) WHERE codigo = 'TEMP-001'
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
                     )
                     """));
                 assertThrows(IllegalArgumentException.class,
@@ -56,11 +42,7 @@ class SimuladorSensoresTest {
             conexion.setAutoCommit(false);
             try {
                 int invernadero;
-<<<<<<< HEAD
                 try (var fila = sql.executeQuery("SELECT id_invernadero FROM sensor WHERE codigo = 'SEN-TEMP-A1'")) {
-=======
-                try (var fila = sql.executeQuery("SELECT id_invernadero FROM sensor WHERE codigo = 'TEMP-001'")) {
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
                     fila.next();
                     invernadero = fila.getInt(1);
                 }
@@ -114,7 +96,6 @@ class SimuladorSensoresTest {
             }
         }
     }
-<<<<<<< HEAD
 
     @Test
     void lasLecturasSimuladasSonRealistas() {
@@ -134,6 +115,4 @@ class SimuladorSensoresTest {
         // Algunas horas de calor al mediodía, no una alerta en cada ronda.
         assertTrue(calurosas > 0 && calurosas < pasos / 10, "horas sobre 30 °C: " + calurosas);
     }
-=======
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
 }

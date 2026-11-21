@@ -5,7 +5,6 @@ import ec.edu.epn.invernaderos.servicio.Monitoreo;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.concurrent.Task;
 import javafx.scene.control.*;
-<<<<<<< HEAD
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
@@ -15,9 +14,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Locale;
-=======
-import javafx.scene.layout.*;
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
 
 import java.sql.SQLException;
 import java.sql.Types;
@@ -26,10 +22,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-<<<<<<< HEAD
 import java.util.Optional;
-=======
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
 import java.util.function.Function;
 
 /** Buzón de alertas con contexto de la lectura, su regla y su resolución. */
@@ -45,12 +38,9 @@ public final class BuzonAlertas extends VBox {
     private final Label ubicacion = new Label(), lectura = new Label(), recomendacion = new Label();
     private final VBox detalle;
     private final Button resolver = new Button("Marcar como resuelta");
-<<<<<<< HEAD
     private final Button adjuntar = new Button("Adjuntar foto de evidencia");
     private final ImageView evidencia = new ImageView();
     private final Label textoEvidencia = new Label();
-=======
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
     private final Button anterior = new Button("Anterior"), siguiente = new Button("Siguiente");
     private Integer idInvernadero;
     private int pagina, revision;
@@ -58,12 +48,8 @@ public final class BuzonAlertas extends VBox {
 
     private record Fila(long id, String fecha, String terreno, String invernadero, String cultivo,
                         String sensor, String magnitud, String valor, String unidad, String regla,
-<<<<<<< HEAD
                         String severidad, String recomendacion, String estado, String resuelta,
                         String evidencia) {}
-=======
-                        String severidad, String recomendacion, String estado, String resuelta) {}
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
 
     public BuzonAlertas() {
         setSpacing(12);
@@ -114,7 +100,6 @@ public final class BuzonAlertas extends VBox {
         recomendacion.setWrapText(true);
         resolver.getStyleClass().add("primary");
         resolver.setOnAction(e -> resolverSeleccion());
-<<<<<<< HEAD
         adjuntar.setOnAction(e -> adjuntarEvidencia());
         evidencia.setPreserveRatio(true);
         evidencia.setFitHeight(160);
@@ -122,9 +107,6 @@ public final class BuzonAlertas extends VBox {
         textoEvidencia.getStyleClass().add("muted");
         detalle = new VBox(5, tituloDetalle, ubicacion, lectura, recomendacion, textoEvidencia, evidencia,
             new HBox(8, resolver, adjuntar));
-=======
-        detalle = new VBox(5, tituloDetalle, ubicacion, lectura, recomendacion, resolver);
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
         detalle.getStyleClass().add("card");
 
         getChildren().addAll(titulo, filtros, tabla, new HBox(8, estado, margen, anterior, siguiente), detalle);
@@ -168,7 +150,6 @@ public final class BuzonAlertas extends VBox {
             + " · " + f.fecha + (f.resuelta == null ? "" : " · Resuelta el " + f.resuelta));
         recomendacion.setText(f.recomendacion);
         resolver.setDisable(resolviendo || f.resuelta != null);
-<<<<<<< HEAD
         adjuntar.setDisable(resolviendo);
         evidencia.setImage(null);
         evidencia.setVisible(false);
@@ -185,8 +166,6 @@ public final class BuzonAlertas extends VBox {
             });
             ejecutar(tarea);
         }
-=======
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
     }
 
     private void cargar(String mensaje) {
@@ -235,11 +214,7 @@ public final class BuzonAlertas extends VBox {
             SELECT a.id_alerta, a.fecha_hora, t.nombre AS terreno, i.nombre AS invernadero,
                    c.nombre AS cultivo, s.codigo, mag.nombre AS magnitud, m.valor, mag.unidad,
                    r.operador, r.umbral, sev.nombre AS severidad, r.recomendacion,
-<<<<<<< HEAD
                    est.nombre AS estado, a.fecha_resolucion, a.fecha_captura_evidencia
-=======
-                   est.nombre AS estado, a.fecha_resolucion
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
             FROM alerta a
             JOIN medicion m ON m.id_medicion = a.id_medicion
             JOIN sensor s ON s.id_sensor = m.id_sensor
@@ -272,13 +247,9 @@ public final class BuzonAlertas extends VBox {
                         rs.getString("codigo"), rs.getString("magnitud"), rs.getBigDecimal("valor").stripTrailingZeros().toPlainString(),
                         Objects.toString(rs.getString("unidad"), ""), rs.getString("operador") + " " + rs.getBigDecimal("umbral").stripTrailingZeros().toPlainString(),
                         rs.getString("severidad"), rs.getString("recomendacion"), rs.getString("estado"),
-<<<<<<< HEAD
                         fin == null ? null : FECHA.format(fin),
                         Optional.ofNullable(rs.getObject("fecha_captura_evidencia", LocalDateTime.class))
                             .map(FECHA::format).orElse(null)));
-=======
-                        fin == null ? null : FECHA.format(fin)));
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
                 }
                 return filas;
             }
@@ -305,7 +276,6 @@ public final class BuzonAlertas extends VBox {
         ejecutar(tarea);
     }
 
-<<<<<<< HEAD
     private void adjuntarEvidencia() {
         Fila fila = tabla.getSelectionModel().getSelectedItem();
         if (fila == null) return;
@@ -342,8 +312,6 @@ public final class BuzonAlertas extends VBox {
         ejecutar(tarea);
     }
 
-=======
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
     private static void ejecutar(Task<?> tarea) {
         var hilo = new Thread(tarea, "buzon-alertas");
         hilo.setDaemon(true);

@@ -23,26 +23,16 @@ public final class MonitoreoDao {
     }
 
     public Registro registrar(Medicion lectura, String origen) throws SQLException {
-<<<<<<< HEAD
         // La magnitud debe colgar del tipo del sensor en el catálogo: un termómetro no registra pH.
-=======
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
         String insertar = """
             INSERT INTO medicion (id_sensor, id_tipo_medicion, fecha_hora, valor, metadatos)
             SELECT s.id_sensor, t.id_catalogo, ?, ?,
                    NULLIF(jsonb_strip_nulls(jsonb_build_object('origen', ?::text)), '{}'::jsonb)
             FROM sensor s JOIN invernadero i USING (id_invernadero) JOIN terreno USING (id_terreno)
             JOIN catalogo tipo_sensor ON tipo_sensor.id_catalogo = s.id_tipo_sensor
-<<<<<<< HEAD
             JOIN catalogo t ON t.id_padre = s.id_tipo_sensor
             WHERE s.codigo = ? AND t.codigo = ? AND s.estado AND i.estado AND t.estado
               AND terreno.estado AND tipo_sensor.estado
-=======
-            CROSS JOIN catalogo t JOIN catalogo categoria ON categoria.id_catalogo = t.id_padre
-            WHERE s.codigo = ? AND t.codigo = ? AND s.estado AND i.estado AND t.estado
-              AND terreno.estado AND tipo_sensor.estado
-              AND categoria.codigo = 'CAT_TIPO_MEDICION' AND categoria.id_padre IS NULL
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
               AND s.fecha_instalacion <= ? AND i.fecha_instalacion <= ?
             ON CONFLICT ON CONSTRAINT medicion_uq3 DO NOTHING
             RETURNING id_medicion
@@ -74,12 +64,8 @@ public final class MonitoreoDao {
             sentencia.setObject(3, lectura.fecha());
             try (var filas = sentencia.executeQuery()) {
                 if (!filas.next()) {
-<<<<<<< HEAD
                     throw new IllegalArgumentException(
                         "El sensor no mide esa magnitud o no está habilitado para esa fecha");
-=======
-                    throw new IllegalArgumentException("Sensor o magnitud sin habilitar para esa fecha");
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
                 }
                 if (filas.getBigDecimal("valor").compareTo(lectura.valor()) != 0) {
                     throw new IllegalArgumentException("La lectura ya existe con otro valor");
@@ -152,7 +138,6 @@ public final class MonitoreoDao {
         return alertas;
     }
 
-<<<<<<< HEAD
     /** ¿Ya hay una alerta pendiente de esta regla para este cultivo y este sensor? Evita repetir el mismo aviso cada hora. */
     public boolean hayPendiente(long medicion, Regla regla) throws SQLException {
         String consulta = """
@@ -180,21 +165,12 @@ public final class MonitoreoDao {
             UPDATE alerta SET fecha_resolucion = LOCALTIMESTAMP, fecha_modificacion = LOCALTIMESTAMP,
                 id_estado = (SELECT id_catalogo FROM catalogo WHERE codigo = 'EST_RESUELTA')
             WHERE id_alerta = ? AND fecha_resolucion IS NULL AND fecha_hora <= LOCALTIMESTAMP
-=======
-    public boolean resolver(long idAlerta) throws SQLException {
-        String actualizar = """
-            UPDATE alerta SET fecha_resolucion = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil'),
-                fecha_modificacion = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil'),
-                id_estado = (SELECT id_catalogo FROM catalogo WHERE codigo = 'EST_RESUELTA')
-            WHERE id_alerta = ? AND fecha_resolucion IS NULL AND fecha_hora <= (CURRENT_TIMESTAMP AT TIME ZONE 'America/Guayaquil')
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
             """;
         try (var sentencia = conexion.prepareStatement(actualizar)) {
             sentencia.setLong(1, idAlerta);
             return sentencia.executeUpdate() == 1;
         }
     }
-<<<<<<< HEAD
 
     /** Guarda la foto que respalda la alerta (evidencia opcional del MER). */
     public boolean adjuntarEvidencia(long idAlerta, byte[] foto, String formato) throws SQLException {
@@ -219,6 +195,4 @@ public final class MonitoreoDao {
             }
         }
     }
-=======
->>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
 }
