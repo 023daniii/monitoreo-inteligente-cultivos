@@ -29,7 +29,10 @@ import java.util.function.*;
 
 public final class Interfaz extends Application {
     private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
+<<<<<<< HEAD
     private static final DateTimeFormatter FECHA_CORTA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+=======
+>>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
     private final InventarioDao inventario = new InventarioDao();
     private final SimuladorSensores simulador = new SimuladorSensores();
     private final ExecutorService consultas = Executors.newFixedThreadPool(2, tarea -> {
@@ -91,7 +94,10 @@ public final class Interfaz extends Application {
     @Override public void stop() {
         refresco.stop();
         consultas.shutdownNow();
+<<<<<<< HEAD
         fotos.cerrar();
+=======
+>>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
     }
 
     private VBox navegacion() {
@@ -159,6 +165,7 @@ public final class Interfaz extends Application {
     private TitledPane formularioIndividual() {
         mostrarNombre(sensorManual, Sensor::codigo);
         mostrarNombre(magnitudManual, Magnitud::nombre);
+<<<<<<< HEAD
         // Solo se ofrecen las magnitudes que mide el sensor elegido.
         sensorManual.valueProperty().addListener((o, antes, sensor) -> {
             var previa = magnitudManual.getValue();
@@ -167,6 +174,8 @@ public final class Interfaz extends Application {
             else magnitudManual.getSelectionModel().selectFirst();
             botones();
         });
+=======
+>>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
         var valor = new TextField();
         valor.setPromptText("Valor");
         valor.setPrefColumnCount(6);
@@ -181,8 +190,12 @@ public final class Interfaz extends Application {
                 iniciarMedida();
                 ejecutar(() -> new Monitoreo().registrar(lectura), r -> {
                     valor.clear();
+<<<<<<< HEAD
                     finMedida(finca, "Lectura guardada · " + (r.alertas().isEmpty() ? "sin alerta nueva."
                         : r.alertas().size() + " alerta(s): " + r.alertas().get(0).recomendacion()));
+=======
+                    finMedida(finca, "Lectura guardada · " + r.alertas().size() + " alertas.");
+>>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
                 }, this::errorMedida);
             } catch (NumberFormatException | ArithmeticException ex) {
                 estado.setText("Escribe un valor numérico con un máximo de cuatro decimales.");
@@ -195,11 +208,17 @@ public final class Interfaz extends Application {
         return pane;
     }
 
+<<<<<<< HEAD
+=======
+    private record Red(List<Terreno> terrenos, List<Magnitud> magnitudes) {}
+
+>>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
     private void cargarInventario() {
         var previo = actual();
         var terrenoPrevio = terrenos.getValue();
         recargar.setDisable(true);
         estado.setText("Consultando terrenos e invernaderos…");
+<<<<<<< HEAD
         ejecutar(inventario::terrenos, datos -> {
             recargar.setDisable(false);
             terrenos.getItems().setAll(datos);
@@ -207,6 +226,18 @@ public final class Interfaz extends Application {
                 datos.stream().mapToInt(t -> t.invernaderos().size()).sum() + " invernaderos");
             terrenos.setValue(datos.stream().filter(t -> terrenoPrevio != null && t.id() == terrenoPrevio.id())
                 .findFirst().orElse(datos.stream().findFirst().orElse(null)));
+=======
+        ejecutar(() -> new Red(inventario.terrenos(), inventario.magnitudes()), datos -> {
+            recargar.setDisable(false);
+            magnitudManual.getItems().setAll(datos.magnitudes());
+            var temperatura = datos.magnitudes().stream().filter(m -> m.codigo().equals("MED_TEMP_AMB")).findFirst();
+            magnitudManual.setValue(temperatura.orElse(datos.magnitudes().stream().findFirst().orElse(null)));
+            terrenos.getItems().setAll(datos.terrenos());
+            red.setText(datos.terrenos().size() + " terrenos · " +
+                datos.terrenos().stream().mapToInt(t -> t.invernaderos().size()).sum() + " invernaderos");
+            terrenos.setValue(datos.terrenos().stream().filter(t -> terrenoPrevio != null && t.id() == terrenoPrevio.id())
+                .findFirst().orElse(datos.terrenos().stream().findFirst().orElse(null)));
+>>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
             if (previo != null) invernaderos.getItems().stream().filter(i -> i.id() == previo.id())
                 .findFirst().ifPresent(i -> invernaderos.getSelectionModel().select(i));
             if (actual() == null) seleccionar();
@@ -265,9 +296,13 @@ public final class Interfaz extends Application {
             sensorManual.setValue(sensor.orElse(d.sensores().stream().findFirst().orElse(null)));
             Map<Integer,String> mapa = new LinkedHashMap<>();
             d.cultivos().forEach(c -> mapa.put(c.id(), c.nombre()));
+<<<<<<< HEAD
             cultivos.setText(d.cultivos().isEmpty() ? "Sin cultivos vigentes" : "Cultivos · " + String.join(", ",
                 d.cultivos().stream().map(c -> c.nombre() + (c.cosechaEstimada() == null ? ""
                     : " (cosecha estimada " + FECHA_CORTA.format(c.cosechaEstimada()) + ")")).toList()));
+=======
+            cultivos.setText(mapa.isEmpty() ? "Sin cultivos vigentes" : "Cultivos · " + String.join(", ", mapa.values()));
+>>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
             if (!mapa.equals(cultivosVisibles)) {
                 cultivosVisibles = mapa;
                 fotos.setInvernadero(finca.nombre(), mapa);
@@ -332,7 +367,11 @@ public final class Interfaz extends Application {
         consultas.execute(tarea);
     }
 
+<<<<<<< HEAD
     private void mostrarError(Throwable ex) { estado.setText("No se pudo completar: " + PanelFotos.mensaje(ex)); }
+=======
+    private void mostrarError(Throwable ex) { estado.setText("Error al consultar o guardar: " + ex.getMessage()); }
+>>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
 
     private void columna(String titulo, Function<Lectura,String> texto) {
         var col = new TableColumn<Lectura,String>(titulo);

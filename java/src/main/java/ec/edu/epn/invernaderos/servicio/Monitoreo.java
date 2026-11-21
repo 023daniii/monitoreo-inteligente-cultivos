@@ -34,7 +34,11 @@ public final class Monitoreo {
         var registro = dao.registrar(lectura, origen);
         if (registro.nuevo()) {
             for (var regla : dao.reglasAplicables(registro.id())) {
+<<<<<<< HEAD
                 if (regla.seActivaCon(lectura.valor()) && !dao.hayPendiente(registro.id(), regla)) {
+=======
+                if (regla.seActivaCon(lectura.valor())) {
+>>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
                     dao.crearAlerta(registro.id(), regla, lectura.fecha());
                 }
             }
@@ -47,6 +51,7 @@ public final class Monitoreo {
             return new MonitoreoDao(conexion).resolver(idAlerta);
         }
     }
+<<<<<<< HEAD
 
     public boolean adjuntarEvidencia(long idAlerta, byte[] foto, String formato) throws SQLException {
         try (var conexion = Conexion.abrir()) {
@@ -59,4 +64,6 @@ public final class Monitoreo {
             return new MonitoreoDao(conexion).evidencia(idAlerta);
         }
     }
+=======
+>>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
 }

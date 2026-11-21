@@ -15,6 +15,7 @@ public final class Conexion {
         Properties credenciales = new Properties();
         credenciales.setProperty("user", variable("POSTGRES_USER", "invernadero"));
         credenciales.setProperty("password", variable("POSTGRES_PASSWORD", "invernadero_local"));
+<<<<<<< HEAD
         Connection conexion = DriverManager.getConnection("jdbc:postgresql://" + host + ":" + puerto + "/" + base,
             credenciales);
         // El controlador JDBC usa la zona del equipo; el sistema trabaja siempre en hora de Ecuador.
@@ -25,6 +26,9 @@ public final class Conexion {
             throw error;
         }
         return conexion;
+=======
+        return DriverManager.getConnection("jdbc:postgresql://" + host + ":" + puerto + "/" + base, credenciales);
+>>>>>>> e114a493a3e10c81b1e1c495db7edd91f11a3a2d
     }
 
     private static String variable(String nombre, String defecto) {
