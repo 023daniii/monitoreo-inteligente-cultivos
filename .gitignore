@@ -1,8 +1,0 @@
-.env
-.venv/
-target/
-__pycache__/
-.pytest_cache/
-*.pyc
-
-datos/fotos/
