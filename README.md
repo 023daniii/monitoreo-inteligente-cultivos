@@ -45,9 +45,6 @@ mvn -f .\java\pom.xml javafx:run
 
 - `docker compose up` crea la base con el esquema, los catálogos (incluidos los 8 diagnósticos) y los datos de demostración, y arranca el **medidor**, que toma una lectura por sensor cada hora aunque la ventana esté cerrada.
 - `preparar.py` crea `.venv`, instala CLIP y **carga las 200 fotos de referencia**. La primera vez descarga el modelo (unos 338 MiB) y tarda unos minutos.
-- Si ya tenías una versión anterior del proyecto, borra una sola vez la base antigua con `docker compose down -v` antes de `up`: el esquema cambió.
-
-En Linux o macOS: `cp .env.example .env`, `docker compose up -d --build --wait`, `python3.12 python/preparar.py` y `mvn -f java/pom.xml javafx:run`.
 
 ## Recorrido de demostración
 
@@ -70,17 +67,6 @@ Nueve tablas y 17 claves foráneas ([esquema](database/01_esquema.sql), [MER edi
   - el estado *Resuelta* tenga fecha de resolución.
 - La base trabaja en hora de Ecuador (`America/Guayaquil`) y tiene índices en las claves foráneas usadas en las uniones.
 
-## Pruebas
-
-Usa una base recién creada (por ejemplo con `docker compose down -v` y `up` de nuevo, sin cargar referencias):
-
-```powershell
-Get-Content -Raw .\database\pruebas.sql | docker compose exec -T db psql -X -U invernadero -d monitoreo_inteligente_cultivos
-mvn -f java/pom.xml test
-.\.venv\Scripts\python.exe -m unittest discover -s python -v
-```
-
-`pruebas.sql` termina con **Integridad verificada** y comprueba 12 casos que la base debe rechazar. Las pruebas JUnit y SQL revierten sus cambios. Las de Python exigen que no haya fotos registradas; con `$env:PROBAR_CLIP = "1"` también prueban el modelo real.
 
 ## Procedencia de las fotos
 
@@ -88,11 +74,3 @@ Las 200 referencias y las 8 fotos de consulta provienen de **PlantDoc** (Singh e
 
 La similitud es visual y sirve para orientar la revisión. El diagnóstico final debe confirmarlo una persona con formación agronómica.
 
-## Si algo falla
-
-| Síntoma | Qué hacer |
-| --- | --- |
-| La interfaz no conecta a PostgreSQL | `docker compose ps`; revisa `DB_PORT` en `.env` si el puerto 5432 está ocupado. |
-| Error de columnas o tablas al abrir | La base es de una versión anterior: `docker compose down -v` y `docker compose up -d --build --wait`. |
-| "No se pudo iniciar Python" o falta un módulo | Ejecuta `py -3.12 .\python\preparar.py`. Para otro intérprete, define `INVERNADEROS_PYTHON`. |
-| La búsqueda dice que no hay referencias | Pulsa **Cargar las 200 fotos de referencia** o repite `preparar.py` con Docker encendido. |
